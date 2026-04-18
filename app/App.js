@@ -1,5 +1,4 @@
-“use client”;
-import { useState, useRef, useEffect } from “react”;
+“use import { useState, useRef, useEffect } from “react”;
 
 // ===== STORAGE =====
 const STORAGE_KEY = “emr_cases_v4”;
