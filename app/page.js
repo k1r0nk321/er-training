@@ -1,143 +1,303 @@
-'use client'
-import { useState, useEffect } from 'react'
-import { useAuth } from './lib/auth-context'
-import { supabase } from './lib/supabase'
+'use client';
 
-export default function TopPage() {
-  const { user, isTrialMode, signIn, signOut, enterTrialMode } = useAuth()
-  const [mode, setMode] = useState('top')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [trialPassword, setTrialPassword] = useState('')
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [announcements, setAnnouncements] = useState([])
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '../lib/auth-context';
+import { supabase } from '../lib/supabase';
 
-  useEffect(() => { fetchAnnouncements() }, [])
+export default function CasesPage() {
+  const { user, userProfile, loading } = useAuth();
+  const router = useRouter();
 
-  const fetchAnnouncements = async () => {
-    const { data } = await supabase.from('announcements').select('*')
-      .eq('is_published', true).order('published_at', { ascending: false }).limit(3)
-    if (data) setAnnouncements(data)
-  }
+  const [cases, setCases] = useState([]);
+  const [filteredCases, setFilteredCases] = useState([]);
+  const [loadingCases, setLoadingCases] = useState(true);
+  const [error, setError] = useState('');
 
-  const handleLogin = async (e) => {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
-    const { error } = await signIn(email, password)
-    if (error) setError(error)
-    setLoading(false)
-  }
+  // フィルター状態
+  const [searchText, setSearchText] = useState('');
+  const [selectedDifficulty, setSelectedDifficulty] = useState('all');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [sortOrder, setSortOrder] = useState('newest');
 
-  const handleTrial = async (e) => {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
-    const { data } = await supabase.from('app_settings').select('value')
-      .eq('key', 'trial_password').single()
-    if (data && data.value === trialPassword) {
-      enterTrialMode()
-    } else {
-      setError('パスワードが違います')
+  // 統計
+  const [myResults, setMyResults] = useState({});
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push('/');
     }
-    setLoading(false)
-  }
+  }, [user, loading, router]);
 
-  if (user || isTrialMode) {
+  useEffect(() => {
+    if (user) {
+      fetchCases();
+      fetchMyResults();
+    }
+  }, [user]);
+
+  useEffect(() => {
+    applyFilter();
+  }, [cases, searchText, selectedDifficulty, selectedCategory, sortOrder]);
+
+  const fetchCases = async () => {
+    setLoadingCases(true);
+    const { data, error } = await supabase
+      .from('cases')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      setError('症例の読み込みに失敗しました');
+      console.error(error);
+    } else {
+      setCases(data || []);
+    }
+    setLoadingCases(false);
+  };
+
+  const fetchMyResults = async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from('results')
+      .select('case_id, score, passed')
+      .eq('user_id', user.id);
+
+    if (data) {
+      // case_idごとに最高スコアを保持
+      const resultMap = {};
+      data.forEach(r => {
+        if (!resultMap[r.case_id] || r.score > resultMap[r.case_id].score) {
+          resultMap[r.case_id] = r;
+        }
+      });
+      setMyResults(resultMap);
+    }
+  };
+
+  const applyFilter = () => {
+    let filtered = [...cases];
+
+    if (searchText) {
+      filtered = filtered.filter(c =>
+        c.title.includes(searchText) ||
+        c.chief_complaint?.includes(searchText) ||
+        c.category?.includes(searchText)
+      );
+    }
+
+    if (selectedDifficulty !== 'all') {
+      filtered = filtered.filter(c => c.difficulty === selectedDifficulty);
+    }
+
+    if (selectedCategory !== 'all') {
+      filtered = filtered.filter(c => c.category === selectedCategory);
+    }
+
+    if (sortOrder === 'newest') {
+      filtered.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    } else if (sortOrder === 'difficulty_asc') {
+      const order = { easy: 1, medium: 2, hard: 3 };
+      filtered.sort((a, b) => (order[a.difficulty] || 2) - (order[b.difficulty] || 2));
+    } else if (sortOrder === 'title') {
+      filtered.sort((a, b) => a.title.localeCompare(b.title, 'ja'));
+    }
+
+    setFilteredCases(filtered);
+  };
+
+  const handleRandomSelect = () => {
+    if (filteredCases.length === 0) return;
+    const randomCase = filteredCases[Math.floor(Math.random() * filteredCases.length)];
+    router.push(`/cases/${randomCase.id}`);
+  };
+
+  const handleRandomUnsolved = () => {
+    const unsolved = filteredCases.filter(c => !myResults[c.id]);
+    if (unsolved.length === 0) {
+      alert('未解答の症例はありません！すべて挑戦済みです 🎉');
+      return;
+    }
+    const randomCase = unsolved[Math.floor(Math.random() * unsolved.length)];
+    router.push(`/cases/${randomCase.id}`);
+  };
+
+  const getDifficultyLabel = (d) => {
+    const labels = { easy: '易', medium: '中', hard: '難' };
+    return labels[d] || '中';
+  };
+
+  const getDifficultyColor = (d) => {
+    const colors = {
+      easy: 'bg-green-100 text-green-700',
+      medium: 'bg-yellow-100 text-yellow-700',
+      hard: 'bg-red-100 text-red-700',
+    };
+    return colors[d] || 'bg-gray-100 text-gray-600';
+  };
+
+  const getScoreBadge = (caseId) => {
+    const result = myResults[caseId];
+    if (!result) return null;
     return (
-      <main style={S.main}>
-        <div style={S.card}>
-          <h1 style={S.title}>🏥 医仁会 臨床研修<br/>ER Training</h1>
-          <p style={S.subtitle}>{isTrialMode ? 'お試しモード' : `${user?.name}さん（${roleLabel(user?.role)}）`}</p>
-          <div style={S.menuGrid}>
-            <a href="/cases" style={S.menuBtn}>📋 症例一覧</a>
-            <a href="/cases/random" style={S.menuBtn}>🎲 ランダム</a>
-            {!isTrialMode && <a href="/results" style={S.menuBtn}>📊 成績</a>}
-            {user?.role === 'admin' && <a href="/admin" style={S.menuBtn}>⚙️ 管理</a>}
-          </div>
-          {announcements.map(a => (
-            <div key={a.id} style={S.annItem}><strong>{a.title}</strong><p style={{margin:'4px 0 0',fontSize:'13px'}}>{a.body}</p></div>
-          ))}
-          <button onClick={signOut} style={S.logoutBtn}>ログアウト</button>
-          <p style={S.credit}>医仁会武田総合病院　中前　恵一郎</p>
+      <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${result.passed ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>
+        {result.passed ? `✓ ${result.score}点` : `${result.score}点`}
+      </span>
+    );
+  };
+
+  // カテゴリ一覧を動的生成
+  const categories = ['all', ...new Set(cases.map(c => c.category).filter(Boolean))];
+
+  const solvedCount = Object.keys(myResults).length;
+  const passedCount = Object.values(myResults).filter(r => r.passed).length;
+
+  if (loading || loadingCases) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+          <p className="text-gray-500">読み込み中...</p>
         </div>
-      </main>
-    )
+      </div>
+    );
   }
 
   return (
-    <main style={S.main}>
-      <div style={S.card}>
-        <div style={{textAlign:'center',marginBottom:'24px'}}>
-          <svg viewBox="0 0 120 120" width="90" height="90">
-            <circle cx="60" cy="30" r="22" fill="#4A90D9"/>
-            <rect x="38" y="55" width="44" height="50" rx="8" fill="#4A90D9" opacity="0.85"/>
-            <rect x="50" y="20" width="4" height="20" rx="2" fill="white"/>
-            <rect x="44" y="26" width="16" height="4" rx="2" fill="white"/>
-            <rect x="48" y="68" width="24" height="4" rx="2" fill="white"/>
-            <rect x="58" y="62" width="4" height="16" rx="2" fill="white"/>
-          </svg>
-          <h1 style={S.title}>医仁会 臨床研修<br/>ER Training</h1>
-          <p style={{color:'#666',fontSize:'13px',margin:'6px 0 0'}}>救急・総合診療 症例トレーニングシステム</p>
+    <div className="min-h-screen bg-gray-50">
+      {/* ヘッダー */}
+      <header className="bg-white shadow-sm sticky top-0 z-10">
+        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+          <button onClick={() => router.push('/')} className="text-blue-600 hover:text-blue-800 flex items-center gap-1 text-sm">
+            ← トップへ
+          </button>
+          <h1 className="text-lg font-bold text-gray-800">症例一覧</h1>
+          <div className="text-sm text-gray-500">
+            {solvedCount}問 / {cases.length}問
+          </div>
         </div>
-        {announcements.length > 0 && (
-          <div style={S.ann}>
-            <p style={{margin:'0 0 8px',fontSize:'13px',fontWeight:'bold',color:'#1a3a5c'}}>📢 お知らせ</p>
-            {announcements.map(a => (
-              <div key={a.id} style={S.annItem}><strong>{a.title}</strong><p style={{margin:'4px 0 0',fontSize:'12px'}}>{a.body}</p></div>
-            ))}
+      </header>
+
+      <div className="max-w-4xl mx-auto px-4 py-6">
+
+        {/* 自分の成績サマリー */}
+        <div className="bg-white rounded-xl shadow-sm p-4 mb-5 flex gap-4">
+          <div className="flex-1 text-center">
+            <div className="text-2xl font-bold text-blue-600">{cases.length}</div>
+            <div className="text-xs text-gray-500">総症例数</div>
           </div>
-        )}
-        {mode === 'top' && (
-          <div style={{display:'flex',flexDirection:'column',gap:'12px',margin:'8px 0'}}>
-            <button onClick={() => setMode('login')} style={S.primaryBtn}>🔐 研修医・指導医ログイン</button>
-            <button onClick={() => setMode('trial')} style={S.secondaryBtn}>👀 お試しモード</button>
+          <div className="flex-1 text-center">
+            <div className="text-2xl font-bold text-indigo-600">{solvedCount}</div>
+            <div className="text-xs text-gray-500">挑戦済み</div>
           </div>
-        )}
-        {mode === 'login' && (
-          <form onSubmit={handleLogin} style={{display:'flex',flexDirection:'column',gap:'12px'}}>
-            <h2 style={S.formTitle}>ログイン</h2>
-            <input type="email" placeholder="メールアドレス" value={email} onChange={e=>setEmail(e.target.value)} style={S.input} required/>
-            <input type="password" placeholder="パスワード" value={password} onChange={e=>setPassword(e.target.value)} style={S.input} required/>
-            {error && <p style={S.error}>{error}</p>}
-            <button type="submit" style={S.primaryBtn} disabled={loading}>{loading?'ログイン中...':'ログイン'}</button>
-            <button type="button" onClick={()=>setMode('top')} style={S.backBtn}>← 戻る</button>
-          </form>
-        )}
-        {mode === 'trial' && (
-          <form onSubmit={handleTrial} style={{display:'flex',flexDirection:'column',gap:'12px'}}>
-            <h2 style={S.formTitle}>お試しモード</h2>
-            <p style={{color:'#666',fontSize:'13px',textAlign:'center',margin:'0',lineHeight:'1.6'}}>4桁のパスワードを入力<br/>（成績は保存されません）</p>
-            <input type="password" placeholder="4桁パスワード" value={trialPassword} onChange={e=>setTrialPassword(e.target.value)} style={S.input} maxLength={4} required/>
-            {error && <p style={S.error}>{error}</p>}
-            <button type="submit" style={S.primaryBtn} disabled={loading}>{loading?'確認中...':'入室する'}</button>
-            <button type="button" onClick={()=>setMode('top')} style={S.backBtn}>← 戻る</button>
-          </form>
-        )}
-        <p style={S.credit}>医仁会武田総合病院　中前　恵一郎</p>
+          <div className="flex-1 text-center">
+            <div className="text-2xl font-bold text-green-600">{passedCount}</div>
+            <div className="text-xs text-gray-500">合格（80点↑）</div>
+          </div>
+          <div className="flex-1 text-center">
+            <div className="text-2xl font-bold text-orange-600">{cases.length - solvedCount}</div>
+            <div className="text-xs text-gray-500">未挑戦</div>
+          </div>
+        </div>
+
+        {/* ランダム選択ボタン */}
+        <div className="flex gap-3 mb-5">
+          <button
+            onClick={handleRandomSelect}
+            disabled={filteredCases.length === 0}
+            className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-blue-700 active:bg-blue-800 disabled:opacity-40 transition"
+          >
+            🎲 ランダムに挑戦
+          </button>
+          <button
+            onClick={handleRandomUnsolved}
+            disabled={filteredCases.length === 0}
+            className="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-40 transition"
+          >
+            🌟 未解答からランダム
+          </button>
+        </div>
+
+        {/* フィルター */}
+        <div className="bg-white rounded-xl shadow-sm p-4 mb-4 space-y-3">
+          <input
+            type="text"
+            placeholder="症例名・主訴・カテゴリで検索..."
+            value={searchText}
+            onChange={e => setSearchText(e.target.value)}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+          />
+          <div className="flex gap-2 flex-wrap">
+            <select
+              value={selectedDifficulty}
+              onChange={e => setSelectedDifficulty(e.target.value)}
+              className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+            >
+              <option value="all">難易度：すべて</option>
+              <option value="easy">易しい</option>
+              <option value="medium">普通</option>
+              <option value="hard">難しい</option>
+            </select>
+            <select
+              value={selectedCategory}
+              onChange={e => setSelectedCategory(e.target.value)}
+              className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+            >
+              {categories.map(c => (
+                <option key={c} value={c}>{c === 'all' ? 'カテゴリ：すべて' : c}</option>
+              ))}
+            </select>
+            <select
+              value={sortOrder}
+              onChange={e => setSortOrder(e.target.value)}
+              className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+            >
+              <option value="newest">新しい順</option>
+              <option value="difficulty_asc">難易度順</option>
+              <option value="title">タイトル順</option>
+            </select>
+          </div>
+          <div className="text-xs text-gray-400">{filteredCases.length}件表示</div>
+        </div>
+
+        {/* 症例リスト */}
+        {error && <p className="text-red-500 text-sm mb-3">{error}</p>}
+        <div className="space-y-3">
+          {filteredCases.map(c => (
+            <button
+              key={c.id}
+              onClick={() => router.push(`/cases/${c.id}`)}
+              className="w-full bg-white rounded-xl shadow-sm p-4 text-left hover:shadow-md hover:border-blue-200 border border-transparent transition"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${getDifficultyColor(c.difficulty)}`}>
+                      {getDifficultyLabel(c.difficulty)}
+                    </span>
+                    {c.category && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{c.category}</span>
+                    )}
+                    {getScoreBadge(c.id)}
+                  </div>
+                  <h3 className="font-bold text-gray-800 text-sm leading-snug">{c.title}</h3>
+                  {c.chief_complaint && (
+                    <p className="text-xs text-gray-500 mt-0.5 truncate">主訴：{c.chief_complaint}</p>
+                  )}
+                </div>
+                <span className="text-gray-300 flex-shrink-0 mt-1">›</span>
+              </div>
+            </button>
+          ))}
+
+          {filteredCases.length === 0 && !loadingCases && (
+            <div className="text-center py-12 text-gray-400">
+              <p className="text-4xl mb-3">📋</p>
+              <p>該当する症例がありません</p>
+            </div>
+          )}
+        </div>
       </div>
-    </main>
-  )
-}
-
-function roleLabel(r){return r==='admin'?'管理者':r==='resident'?'研修医':'ゲスト'}
-
-const S={
-  main:{minHeight:'100vh',background:'linear-gradient(135deg,#1a3a5c 0%,#2E6DB4 50%,#4A90D9 100%)',display:'flex',alignItems:'center',justifyContent:'center',padding:'20px',fontFamily:"'Helvetica Neue',Arial,sans-serif"},
-  card:{background:'white',borderRadius:'20px',padding:'40px 32px',maxWidth:'440px',width:'100%',boxShadow:'0 20px 60px rgba(0,0,0,0.3)'},
-  title:{fontSize:'24px',fontWeight:'bold',color:'#1a3a5c',margin:'0',lineHeight:'1.4',textAlign:'center'},
-  subtitle:{textAlign:'center',color:'#4A90D9',fontSize:'15px',margin:'0 0 20px'},
-  menuGrid:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px',margin:'20px 0'},
-  menuBtn:{background:'#f0f7ff',border:'2px solid #4A90D9',borderRadius:'12px',padding:'16px 8px',textAlign:'center',color:'#1a3a5c',fontWeight:'bold',fontSize:'14px',textDecoration:'none',display:'block'},
-  primaryBtn:{background:'#2E6DB4',color:'white',border:'none',borderRadius:'12px',padding:'16px',fontSize:'16px',fontWeight:'bold',cursor:'pointer',width:'100%'},
-  secondaryBtn:{background:'white',color:'#2E6DB4',border:'2px solid #2E6DB4',borderRadius:'12px',padding:'14px',fontSize:'16px',fontWeight:'bold',cursor:'pointer',width:'100%'},
-  formTitle:{fontSize:'18px',fontWeight:'bold',color:'#1a3a5c',margin:'0 0 4px',textAlign:'center'},
-  input:{border:'2px solid #ddd',borderRadius:'10px',padding:'14px',fontSize:'16px',outline:'none',width:'100%',boxSizing:'border-box'},
-  backBtn:{background:'none',border:'none',color:'#888',cursor:'pointer',fontSize:'14px',padding:'8px'},
-  error:{color:'#e74c3c',fontSize:'14px',margin:'0',textAlign:'center'},
-  ann:{background:'#f8f9ff',borderRadius:'12px',padding:'16px',margin:'16px 0',borderLeft:'4px solid #4A90D9'},
-  annItem:{marginBottom:'8px',fontSize:'13px',color:'#333'},
-  logoutBtn:{background:'#f5f5f5',border:'1px solid #ddd',borderRadius:'8px',padding:'10px',cursor:'pointer',width:'100%',marginTop:'16px',color:'#666',fontSize:'14px'},
-  credit:{textAlign:'center',color:'#aaa',fontSize:'11px',margin:'16px 0 0'},
+    </div>
+  );
 }
