@@ -1,16 +1,19 @@
+import { AuthProvider } from './lib/auth-context'
+import './globals.css'
+
 export const metadata = {
-  title: "ER Training - 救急臨床推論",
-  description: "研修医向け救急臨床推論トレーニングアプリ",
-  viewport: "width=device-width, initial-scale=1, maximum-scale=1"
-};
+  title: '医仁会 臨床研修 ER Training',
+  description: '医仁会武田総合病院 臨床研修 救急トレーニングシステム',
+}
 
 export default function RootLayout({ children }) {
   return (
     <html lang="ja">
-      <body style={{ margin: 0, padding: 0, background: "#0a0e1a" }}>
-        {children}
+      <body>
+        <AuthProvider>
+          {children}
+        </AuthProvider>
       </body>
     </html>
-  );
+  )
 }
-
