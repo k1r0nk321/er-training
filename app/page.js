@@ -2,159 +2,70 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '../lib/auth-context';
-import { supabase } from '../lib/supabase';
+import { useAuth } from './lib/auth-context';
+import { supabase } from './lib/supabase';
 
-export default function CasesPage() {
-  const { user, userProfile, loading } = useAuth();
+export default function HomePage() {
+  const { user, userProfile, signIn, signOut, loading } = useAuth();
   const router = useRouter();
 
-  const [cases, setCases] = useState([]);
-  const [filteredCases, setFilteredCases] = useState([]);
-  const [loadingCases, setLoadingCases] = useState(true);
-  const [error, setError] = useState('');
-
-  // フィルター状態
-  const [searchText, setSearchText] = useState('');
-  const [selectedDifficulty, setSelectedDifficulty] = useState('all');
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [sortOrder, setSortOrder] = useState('newest');
-
-  // 統計
-  const [myResults, setMyResults] = useState({});
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [mode, setMode] = useState('login'); // 'login' | 'trial'
+  const [trialPassword, setTrialPassword] = useState('');
+  const [trialError, setTrialError] = useState('');
+  const [announcements, setAnnouncements] = useState([]);
+  const [trialPw, setTrialPw] = useState('');
 
   useEffect(() => {
-    if (!loading && !user) {
-      router.push('/');
-    }
-  }, [user, loading, router]);
+    fetchAnnouncements();
+    fetchTrialPw();
+  }, []);
 
-  useEffect(() => {
-    if (user) {
-      fetchCases();
-      fetchMyResults();
-    }
-  }, [user]);
-
-  useEffect(() => {
-    applyFilter();
-  }, [cases, searchText, selectedDifficulty, selectedCategory, sortOrder]);
-
-  const fetchCases = async () => {
-    setLoadingCases(true);
-    const { data, error } = await supabase
-      .from('cases')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      setError('症例の読み込みに失敗しました');
-      console.error(error);
-    } else {
-      setCases(data || []);
-    }
-    setLoadingCases(false);
-  };
-
-  const fetchMyResults = async () => {
-    if (!user) return;
+  const fetchAnnouncements = async () => {
     const { data } = await supabase
-      .from('results')
-      .select('case_id, score, passed')
-      .eq('user_id', user.id);
+      .from('announcements')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(5);
+    setAnnouncements(data || []);
+  };
 
-    if (data) {
-      // case_idごとに最高スコアを保持
-      const resultMap = {};
-      data.forEach(r => {
-        if (!resultMap[r.case_id] || r.score > resultMap[r.case_id].score) {
-          resultMap[r.case_id] = r;
-        }
-      });
-      setMyResults(resultMap);
+  const fetchTrialPw = async () => {
+    const { data } = await supabase
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'trial_password')
+      .single();
+    if (data) setTrialPw(data.value);
+  };
+
+  const handleLogin = async (e) => {
+    e?.preventDefault();
+    setLoginError('');
+    setLoginLoading(true);
+    const { error } = await signIn(email, password);
+    if (error) {
+      setLoginError('メールアドレスまたはパスワードが違います');
+    }
+    setLoginLoading(false);
+  };
+
+  const handleTrial = () => {
+    if (trialPassword === trialPw) {
+      // お試しモード：sessionStorageにフラグを立てる
+      sessionStorage.setItem('trial_mode', 'true');
+      router.push('/cases');
+    } else {
+      setTrialError('パスワードが違います。管理者にご確認ください。');
     }
   };
 
-  const applyFilter = () => {
-    let filtered = [...cases];
-
-    if (searchText) {
-      filtered = filtered.filter(c =>
-        c.title.includes(searchText) ||
-        c.chief_complaint?.includes(searchText) ||
-        c.category?.includes(searchText)
-      );
-    }
-
-    if (selectedDifficulty !== 'all') {
-      filtered = filtered.filter(c => c.difficulty === selectedDifficulty);
-    }
-
-    if (selectedCategory !== 'all') {
-      filtered = filtered.filter(c => c.category === selectedCategory);
-    }
-
-    if (sortOrder === 'newest') {
-      filtered.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-    } else if (sortOrder === 'difficulty_asc') {
-      const order = { easy: 1, medium: 2, hard: 3 };
-      filtered.sort((a, b) => (order[a.difficulty] || 2) - (order[b.difficulty] || 2));
-    } else if (sortOrder === 'title') {
-      filtered.sort((a, b) => a.title.localeCompare(b.title, 'ja'));
-    }
-
-    setFilteredCases(filtered);
-  };
-
-  const handleRandomSelect = () => {
-    if (filteredCases.length === 0) return;
-    const randomCase = filteredCases[Math.floor(Math.random() * filteredCases.length)];
-    router.push(`/cases/${randomCase.id}`);
-  };
-
-  const handleRandomUnsolved = () => {
-    const unsolved = filteredCases.filter(c => !myResults[c.id]);
-    if (unsolved.length === 0) {
-      alert('未解答の症例はありません！すべて挑戦済みです 🎉');
-      return;
-    }
-    const randomCase = unsolved[Math.floor(Math.random() * unsolved.length)];
-    router.push(`/cases/${randomCase.id}`);
-  };
-
-  const getDifficultyLabel = (d) => {
-    const labels = { easy: '易', medium: '中', hard: '難' };
-    return labels[d] || '中';
-  };
-
-  const getDifficultyColor = (d) => {
-    const colors = {
-      easy: 'bg-green-100 text-green-700',
-      medium: 'bg-yellow-100 text-yellow-700',
-      hard: 'bg-red-100 text-red-700',
-    };
-    return colors[d] || 'bg-gray-100 text-gray-600';
-  };
-
-  const getScoreBadge = (caseId) => {
-    const result = myResults[caseId];
-    if (!result) return null;
+  if (loading) {
     return (
-      <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${result.passed ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>
-        {result.passed ? `✓ ${result.score}点` : `${result.score}点`}
-      </span>
-    );
-  };
-
-  // カテゴリ一覧を動的生成
-  const categories = ['all', ...new Set(cases.map(c => c.category).filter(Boolean))];
-
-  const solvedCount = Object.keys(myResults).length;
-  const passedCount = Object.values(myResults).filter(r => r.passed).length;
-
-  if (loading || loadingCases) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
           <p className="text-gray-500">読み込み中...</p>
@@ -163,140 +74,180 @@ export default function CasesPage() {
     );
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* ヘッダー */}
-      <header className="bg-white shadow-sm sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
-          <button onClick={() => router.push('/')} className="text-blue-600 hover:text-blue-800 flex items-center gap-1 text-sm">
-            ← トップへ
-          </button>
-          <h1 className="text-lg font-bold text-gray-800">症例一覧</h1>
-          <div className="text-sm text-gray-500">
-            {solvedCount}問 / {cases.length}問
-          </div>
-        </div>
-      </header>
+  // ログイン済みのトップ画面
+  if (user && userProfile) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+        <div className="max-w-md mx-auto px-4 py-8 space-y-5">
 
-      <div className="max-w-4xl mx-auto px-4 py-6">
+          {/* ヘッダー */}
+          <div className="text-center py-4">
+            <div className="text-4xl mb-2">🏥</div>
+            <h1 className="text-2xl font-black text-gray-900">ER Training</h1>
+            <p className="text-sm text-gray-500 mt-1">医仁会 臨床研修プログラム</p>
+          </div>
 
-        {/* 自分の成績サマリー */}
-        <div className="bg-white rounded-xl shadow-sm p-4 mb-5 flex gap-4">
-          <div className="flex-1 text-center">
-            <div className="text-2xl font-bold text-blue-600">{cases.length}</div>
-            <div className="text-xs text-gray-500">総症例数</div>
+          {/* ウェルカムカード */}
+          <div className="bg-white rounded-2xl shadow-sm p-5">
+            <p className="text-sm text-gray-500">ようこそ</p>
+            <p className="text-xl font-bold text-gray-900 mt-0.5">{userProfile.name} 先生</p>
+            <p className="text-sm text-blue-600">{userProfile.role}</p>
           </div>
-          <div className="flex-1 text-center">
-            <div className="text-2xl font-bold text-indigo-600">{solvedCount}</div>
-            <div className="text-xs text-gray-500">挑戦済み</div>
-          </div>
-          <div className="flex-1 text-center">
-            <div className="text-2xl font-bold text-green-600">{passedCount}</div>
-            <div className="text-xs text-gray-500">合格（80点↑）</div>
-          </div>
-          <div className="flex-1 text-center">
-            <div className="text-2xl font-bold text-orange-600">{cases.length - solvedCount}</div>
-            <div className="text-xs text-gray-500">未挑戦</div>
-          </div>
-        </div>
 
-        {/* ランダム選択ボタン */}
-        <div className="flex gap-3 mb-5">
-          <button
-            onClick={handleRandomSelect}
-            disabled={filteredCases.length === 0}
-            className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-blue-700 active:bg-blue-800 disabled:opacity-40 transition"
-          >
-            🎲 ランダムに挑戦
-          </button>
-          <button
-            onClick={handleRandomUnsolved}
-            disabled={filteredCases.length === 0}
-            className="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-40 transition"
-          >
-            🌟 未解答からランダム
-          </button>
-        </div>
-
-        {/* フィルター */}
-        <div className="bg-white rounded-xl shadow-sm p-4 mb-4 space-y-3">
-          <input
-            type="text"
-            placeholder="症例名・主訴・カテゴリで検索..."
-            value={searchText}
-            onChange={e => setSearchText(e.target.value)}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-          />
-          <div className="flex gap-2 flex-wrap">
-            <select
-              value={selectedDifficulty}
-              onChange={e => setSelectedDifficulty(e.target.value)}
-              className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-            >
-              <option value="all">難易度：すべて</option>
-              <option value="easy">易しい</option>
-              <option value="medium">普通</option>
-              <option value="hard">難しい</option>
-            </select>
-            <select
-              value={selectedCategory}
-              onChange={e => setSelectedCategory(e.target.value)}
-              className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-            >
-              {categories.map(c => (
-                <option key={c} value={c}>{c === 'all' ? 'カテゴリ：すべて' : c}</option>
-              ))}
-            </select>
-            <select
-              value={sortOrder}
-              onChange={e => setSortOrder(e.target.value)}
-              className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-            >
-              <option value="newest">新しい順</option>
-              <option value="difficulty_asc">難易度順</option>
-              <option value="title">タイトル順</option>
-            </select>
-          </div>
-          <div className="text-xs text-gray-400">{filteredCases.length}件表示</div>
-        </div>
-
-        {/* 症例リスト */}
-        {error && <p className="text-red-500 text-sm mb-3">{error}</p>}
-        <div className="space-y-3">
-          {filteredCases.map(c => (
+          {/* メインメニュー */}
+          <div className="grid grid-cols-2 gap-3">
             <button
-              key={c.id}
-              onClick={() => router.push(`/cases/${c.id}`)}
-              className="w-full bg-white rounded-xl shadow-sm p-4 text-left hover:shadow-md hover:border-blue-200 border border-transparent transition"
+              onClick={() => router.push('/cases')}
+              className="bg-blue-600 text-white rounded-2xl p-5 text-left hover:bg-blue-700 active:bg-blue-800 transition shadow-sm"
             >
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${getDifficultyColor(c.difficulty)}`}>
-                      {getDifficultyLabel(c.difficulty)}
-                    </span>
-                    {c.category && (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{c.category}</span>
-                    )}
-                    {getScoreBadge(c.id)}
-                  </div>
-                  <h3 className="font-bold text-gray-800 text-sm leading-snug">{c.title}</h3>
-                  {c.chief_complaint && (
-                    <p className="text-xs text-gray-500 mt-0.5 truncate">主訴：{c.chief_complaint}</p>
-                  )}
-                </div>
-                <span className="text-gray-300 flex-shrink-0 mt-1">›</span>
+              <div className="text-3xl mb-2">📋</div>
+              <div className="font-bold text-base">症例に挑戦</div>
+              <div className="text-xs text-blue-200 mt-0.5">鑑別診断・採点</div>
+            </button>
+            <button
+              onClick={() => router.push('/results')}
+              className="bg-indigo-600 text-white rounded-2xl p-5 text-left hover:bg-indigo-700 active:bg-indigo-800 transition shadow-sm"
+            >
+              <div className="text-3xl mb-2">📊</div>
+              <div className="font-bold text-base">成績一覧</div>
+              <div className="text-xs text-indigo-200 mt-0.5">過去の記録</div>
+            </button>
+          </div>
+
+          {userProfile.is_admin && (
+            <button
+              onClick={() => router.push('/admin')}
+              className="w-full bg-gray-700 text-white rounded-2xl p-4 text-left hover:bg-gray-800 transition shadow-sm flex items-center gap-3"
+            >
+              <span className="text-2xl">🔧</span>
+              <div>
+                <div className="font-bold">管理者ダッシュボード</div>
+                <div className="text-xs text-gray-300">統計・症例管理・お知らせ</div>
               </div>
             </button>
-          ))}
+          )}
 
-          {filteredCases.length === 0 && !loadingCases && (
-            <div className="text-center py-12 text-gray-400">
-              <p className="text-4xl mb-3">📋</p>
-              <p>該当する症例がありません</p>
+          {/* お知らせ */}
+          {announcements.length > 0 && (
+            <div className="bg-white rounded-2xl shadow-sm p-4 space-y-2">
+              <h3 className="font-bold text-gray-700 text-sm">📢 お知らせ</h3>
+              {announcements.map(a => (
+                <div key={a.id} className={`p-3 rounded-xl ${a.important ? 'bg-red-50' : 'bg-gray-50'}`}>
+                  <p className={`text-sm font-bold ${a.important ? 'text-red-600' : 'text-gray-700'}`}>{a.title}</p>
+                  {a.body && <p className="text-xs text-gray-500 mt-0.5">{a.body}</p>}
+                </div>
+              ))}
             </div>
           )}
+
+          {/* ログアウト */}
+          <button
+            onClick={signOut}
+            className="w-full text-gray-400 text-sm py-2 hover:text-gray-600"
+          >
+            ログアウト
+          </button>
         </div>
+      </div>
+    );
+  }
+
+  // 未ログイン画面
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col">
+      <div className="max-w-md mx-auto w-full px-4 py-10 space-y-6 flex-1">
+
+        {/* タイトル */}
+        <div className="text-center py-4">
+          <div className="text-5xl mb-3">🏥</div>
+          <h1 className="text-3xl font-black text-gray-900">ER Training</h1>
+          <p className="text-gray-500 mt-1">医仁会 臨床研修プログラム</p>
+        </div>
+
+        {/* タブ切り替え */}
+        <div className="bg-white rounded-2xl shadow-sm p-1 flex">
+          <button
+            onClick={() => setMode('login')}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition ${mode === 'login' ? 'bg-blue-600 text-white' : 'text-gray-400'}`}
+          >
+            ログイン
+          </button>
+          <button
+            onClick={() => setMode('trial')}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition ${mode === 'trial' ? 'bg-indigo-600 text-white' : 'text-gray-400'}`}
+          >
+            お試しモード
+          </button>
+        </div>
+
+        {/* ログインフォーム */}
+        {mode === 'login' && (
+          <div className="bg-white rounded-2xl shadow-sm p-6 space-y-4">
+            <h2 className="font-bold text-gray-700">アカウントでログイン</h2>
+            <form onSubmit={handleLogin} className="space-y-3">
+              <input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="メールアドレス"
+                required
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+              />
+              <input
+                type="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="パスワード"
+                required
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+              />
+              {loginError && <p className="text-red-500 text-xs">{loginError}</p>}
+              <button
+                type="submit"
+                disabled={loginLoading}
+                className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-blue-700 disabled:opacity-50 transition"
+              >
+                {loginLoading ? 'ログイン中...' : 'ログイン'}
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* お試しモード */}
+        {mode === 'trial' && (
+          <div className="bg-white rounded-2xl shadow-sm p-6 space-y-4">
+            <h2 className="font-bold text-gray-700">お試しモード</h2>
+            <p className="text-xs text-gray-500">共通パスワードで症例を体験できます。成績は保存されません。</p>
+            <input
+              type="password"
+              value={trialPassword}
+              onChange={e => setTrialPassword(e.target.value)}
+              placeholder="共通パスワード"
+              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+              onKeyDown={e => e.key === 'Enter' && handleTrial()}
+            />
+            {trialError && <p className="text-red-500 text-xs">{trialError}</p>}
+            <button
+              onClick={handleTrial}
+              disabled={!trialPassword}
+              className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-indigo-700 disabled:opacity-50 transition"
+            >
+              体験する
+            </button>
+          </div>
+        )}
+
+        {/* お知らせ（未ログイン時も表示） */}
+        {announcements.filter(a => a.important).length > 0 && (
+          <div className="space-y-2">
+            {announcements.filter(a => a.important).map(a => (
+              <div key={a.id} className="bg-red-50 border border-red-100 rounded-xl p-3">
+                <p className="text-sm font-bold text-red-600">🔴 {a.title}</p>
+                {a.body && <p className="text-xs text-red-700 mt-0.5">{a.body}</p>}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
