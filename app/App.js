@@ -1,3 +1,4 @@
+import React from "react";
 import { useState, useRef, useEffect } from "react";
 
 const STORAGE_KEY = "emr_cases_v5";
