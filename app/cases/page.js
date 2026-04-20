@@ -64,11 +64,18 @@ export default function CasesPage() {
       .eq('user_id', user.id);
 
     if (data) {
-      // case_idごとに最高スコアを保持
+      // case_idごとに記録を保持（合格・不合格問わず挑戦済みとしてカウント）
+      // 最高スコアを保持しつつ、挑戦したことは必ず記録
       const resultMap = {};
       data.forEach(r => {
-        if (!resultMap[r.case_id] || r.score > resultMap[r.case_id].score) {
+        if (!resultMap[r.case_id]) {
+          // 初回：そのまま登録
           resultMap[r.case_id] = r;
+        } else {
+          // 2回目以降：スコアが高い方を保持（ただし挑戦済みフラグは維持）
+          if (r.score > resultMap[r.case_id].score) {
+            resultMap[r.case_id] = r;
+          }
         }
       });
       setMyResults(resultMap);
@@ -139,9 +146,16 @@ export default function CasesPage() {
   const getScoreBadge = (caseId) => {
     const result = myResults[caseId];
     if (!result) return null;
+    if (result.passed) {
+      return (
+        <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-green-100 text-green-700">
+          ✓ {result.score}点
+        </span>
+      );
+    }
     return (
-      <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${result.passed ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>
-        {result.passed ? `✓ ${result.score}点` : `${result.score}点`}
+      <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-orange-100 text-orange-600">
+        挑戦済 {result.score}点
       </span>
     );
   };
@@ -173,7 +187,7 @@ export default function CasesPage() {
           </button>
           <h1 className="text-lg font-bold text-gray-800">症例一覧</h1>
           <div className="text-sm text-gray-500">
-            {solvedCount}問 / {cases.length}問
+            挑戦 {solvedCount} / {cases.length}問
           </div>
         </div>
       </header>
@@ -189,10 +203,12 @@ export default function CasesPage() {
           <div className="flex-1 text-center">
             <div className="text-2xl font-bold text-indigo-600">{solvedCount}</div>
             <div className="text-xs text-gray-500">挑戦済み</div>
+            <div className="text-xs text-gray-400">（合否問わず）</div>
           </div>
           <div className="flex-1 text-center">
             <div className="text-2xl font-bold text-green-600">{passedCount}</div>
-            <div className="text-xs text-gray-500">合格（80点↑）</div>
+            <div className="text-xs text-gray-500">合格</div>
+            <div className="text-xs text-gray-400">（80点以上）</div>
           </div>
           <div className="flex-1 text-center">
             <div className="text-2xl font-bold text-orange-600">{cases.length - solvedCount}</div>
