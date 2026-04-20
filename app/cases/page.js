@@ -29,7 +29,14 @@ export default function CasesPage() {
   useEffect(() => {
     // お試しモードチェック
     const trial = sessionStorage.getItem('trial_mode') === 'true';
-    setIsTrialMode(trial);
+
+    // ログイン済みユーザーはお試しモードフラグを強制クリア
+    if (user) {
+      sessionStorage.removeItem('trial_mode');
+      setIsTrialMode(false);
+    } else {
+      setIsTrialMode(trial);
+    }
 
     if (!loading && !user && !trial) {
       router.push('/');
@@ -37,7 +44,7 @@ export default function CasesPage() {
     }
 
     // お試しモードの場合はuserがnullでも症例を取得する
-    if (trial) {
+    if (trial && !user) {
       fetchCases();
     }
   }, [user, loading, router]);
