@@ -171,6 +171,7 @@ export default function HomePage() {
             <form onSubmit={handleRegister} className="space-y-4">
               <div>
                 <label className="text-sm font-bold text-gray-700 mb-1 block">お名前 *</label>
+                <p className="text-xs text-orange-600 mb-2">⚠️ 2次配布防止のため、実名でご登録ください。</p>
                 <input
                   type="text"
                   value={regName}
@@ -452,13 +453,15 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* 重要なお知らせ */}
-        {announcements.filter(a => a.important).length > 0 && (
+        {/* お知らせ（全件表示） */}
+        {announcements.length > 0 && (
           <div className="space-y-2">
-            {announcements.filter(a => a.important).map(a => (
-              <div key={a.id} className="bg-red-50 border border-red-100 rounded-xl p-3">
-                <p className="text-sm font-bold text-red-600">🔴 {a.title}</p>
-                {a.body && <p className="text-xs text-red-700 mt-0.5">{a.body}</p>}
+            {announcements.map(a => (
+              <div key={a.id} className={`rounded-xl p-4 ${a.important ? 'bg-red-50 border border-red-100' : 'bg-white border border-gray-100 shadow-sm'}`}>
+                <p className={`text-sm font-bold ${a.important ? 'text-red-600' : 'text-gray-700'}`}>
+                  {a.important ? '🔴 ' : '📢 '}{a.title}
+                </p>
+                {a.body && <p className={`text-xs mt-1 ${a.important ? 'text-red-700' : 'text-gray-500'}`}>{a.body}</p>}
               </div>
             ))}
           </div>
