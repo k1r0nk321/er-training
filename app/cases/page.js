@@ -297,15 +297,6 @@ export default function CasesPage() {
               <option value="hard">難しい</option>
             </select>
             <select
-              value={selectedCategory}
-              onChange={e => setSelectedCategory(e.target.value)}
-              className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-            >
-              {categories.map(c => (
-                <option key={c} value={c}>{c === 'all' ? 'カテゴリ：すべて' : c}</option>
-              ))}
-            </select>
-            <select
               value={sortOrder}
               onChange={e => setSortOrder(e.target.value)}
               className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
@@ -333,9 +324,6 @@ export default function CasesPage() {
                     <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${getDifficultyColor(c.difficulty)}`}>
                       {getDifficultyLabel(c.difficulty)}
                     </span>
-                    {c.category && (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{c.category}</span>
-                    )}
                     {getScoreBadge(c.id)}
                   </div>
                   <h3 className="font-bold text-gray-800 text-sm leading-snug">{c.title}</h3>
