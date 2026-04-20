@@ -33,15 +33,20 @@ export default function CasesPage() {
 
     if (!loading && !user && !trial) {
       router.push('/');
+      return;
+    }
+
+    // お試しモードの場合はuserがnullでも症例を取得する
+    if (trial) {
+      fetchCases();
     }
   }, [user, loading, router]);
 
   useEffect(() => {
     const trial = sessionStorage.getItem('trial_mode') === 'true';
-    // 症例取得は常に実行
-    fetchCases();
-    // 成績取得はログイン済みユーザーのみ（お試しモードはスキップ）
+    // ログイン済みユーザーの場合：症例取得＋成績取得
     if (user && !trial) {
+      fetchCases();
       fetchMyResults();
     }
   }, [user]);
@@ -218,7 +223,7 @@ export default function CasesPage() {
               </div>
               <div className="flex items-center justify-between py-2">
                 <span className="text-sm text-gray-600">合格（80点以上）</span>
-                <span className="text-lg font-bold text-green-600">{passedCount} / {solvedCount}例</span>
+                <span className="text-lg font-bold text-green-600">{passedCount} / {cases.length}例</span>
               </div>
             </>
           )}
