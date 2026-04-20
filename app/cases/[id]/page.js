@@ -229,19 +229,18 @@ ${conversationHistory}
 ${examsToRun.map((e, i) => `${i + 1}. ${e}`).join('\n')}
 
 以下のルール：
-- 症例の診断（${caseData.answer_diagnosis}）に関連する検査は、その疾患に特徴的な所見を生成する
-- 症例と直接関係のない検査は「特記すべき異常なし（正常範囲）」と返す
+- 症例の診断（${caseData.answer_diagnosis}）に関連する検査は、その疾患に特徴的な所見・数値を生成する
+- 症例と直接関係のない検査は「異常なし」と返す
 - 症例に設定済みの検査所見がある場合はそれを優先する
-- 各検査結果は2〜4行で具体的に記載（数値も含める）
-- 研修医の教育に役立つよう、重要な所見は強調する
+- 検査結果は数値・所見のみを記載する（解釈・指導コメント・「示唆する」などの解釈的な表現は一切含めない）
+- 例：「Hb 7.2 g/dL、WBC 12,400/μL、PLT 18.4万/μL」のような純粋なデータのみ
 
 以下のJSON形式のみで返答（マークダウン記号不要）：
 {
   "results": {
-    "検査名1": "結果の内容",
-    "検査名2": "結果の内容"
-  },
-  "key_finding": "最も重要な所見を1文で"
+    "検査名1": "数値・所見のみ",
+    "検査名2": "数値・所見のみ"
+  }
 }`;
 
     try {
@@ -254,9 +253,6 @@ ${examsToRun.map((e, i) => `${i + 1}. ${e}`).join('\n')}
       const text = (data.text || data.content || '').replace(/```json|```/g, '').trim();
       const parsed = JSON.parse(text);
       setExamResults(parsed.results || {});
-      if (parsed.key_finding) {
-        setExamResults(prev => ({ ...prev, _key_finding: parsed.key_finding }));
-      }
       setExamDone(true);
     } catch (e) {
       alert('検査結果の取得に失敗しました。もう一度お試しください。');
@@ -505,14 +501,14 @@ ${finalDiagnosis}
           </div>
 
           {/* 選択した検査と結果 */}
-          {Object.keys(examResults).filter(k => k !== '_key_finding').length > 0 && (
+          {Object.keys(examResults).length > 0 && (
             <div className="bg-white rounded-xl shadow-sm p-4">
               <h3 className="font-bold text-gray-700 mb-2">実施した検査と結果</h3>
-              <div className="space-y-2">
-                {Object.entries(examResults).filter(([k]) => k !== '_key_finding').map(([exam, result]) => (
-                  <div key={exam} className="border-b border-gray-100 pb-2 last:border-0">
-                    <p className="text-xs font-bold text-gray-600">{exam}</p>
-                    <p className="text-xs text-gray-700 mt-0.5 whitespace-pre-wrap">{result}</p>
+              <div className="divide-y divide-gray-100">
+                {Object.entries(examResults).map(([exam, result]) => (
+                  <div key={exam} className="py-2">
+                    <p className="text-xs font-bold text-indigo-600">{exam}</p>
+                    <p className="text-xs text-gray-900 font-mono mt-0.5 whitespace-pre-wrap">{result}</p>
                   </div>
                 ))}
               </div>
@@ -800,46 +796,41 @@ ${finalDiagnosis}
               </div>
             )}
 
-            {/* 検査実施ボタン */}
-            {!examDone && (
+            {/* 検査実施ボタン＋結果（ボタンのすぐ下に表示） */}
+            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
               <button
                 onClick={handleRunExams}
                 disabled={examLoading || (selectedExamIds.length === 0 && !otherExam.trim())}
-                className="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold text-base hover:bg-indigo-700 disabled:opacity-40 transition flex items-center justify-center gap-2"
+                className="w-full bg-indigo-600 text-white py-4 font-bold text-base hover:bg-indigo-700 disabled:opacity-40 transition flex items-center justify-center gap-2"
               >
                 {examLoading ? (
                   <><div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>検査実施中...</>
                 ) : '🔬 検査を実施する'}
               </button>
-            )}
 
-            {/* 検査結果表示 */}
-            {examDone && Object.keys(examResults).length > 0 && (
-              <div className="bg-white rounded-xl shadow-sm p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-gray-700">🔬 検査結果</h3>
-                  <button onClick={() => setExamDone(false)} className="text-xs text-gray-400 hover:text-gray-600">再選択</button>
-                </div>
-
-                {/* キーファインディング */}
-                {examResults._key_finding && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                    <p className="text-xs font-bold text-red-600">🚨 Key Finding</p>
-                    <p className="text-sm text-red-800 mt-0.5 font-medium">{examResults._key_finding}</p>
-                  </div>
-                )}
-
-                {/* 各検査結果 */}
-                <div className="space-y-3">
-                  {Object.entries(examResults).filter(([k]) => k !== '_key_finding').map(([exam, result]) => (
-                    <div key={exam} className="border border-gray-100 rounded-lg p-3">
-                      <p className="text-xs font-bold text-indigo-600 mb-1">{exam}</p>
-                      <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{result}</p>
+              {/* 検査結果：ボタンのすぐ下に即時表示 */}
+              {examLoading && (
+                <div className="p-4 space-y-2">
+                  {[...selectedExamLabels, otherExam].filter(Boolean).map(label => (
+                    <div key={label} className="flex items-center gap-3 py-2 border-b border-gray-100">
+                      <div className="w-3 h-3 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin flex-shrink-0"></div>
+                      <span className="text-sm text-gray-500">{label}　検査中...</span>
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
+              )}
+
+              {examDone && Object.keys(examResults).length > 0 && (
+                <div className="divide-y divide-gray-100">
+                  {Object.entries(examResults).filter(([k]) => k !== '_key_finding').map(([exam, result]) => (
+                    <div key={exam} className="px-4 py-3">
+                      <p className="text-xs font-bold text-indigo-600 mb-1">{exam}</p>
+                      <p className="text-sm text-gray-900 font-mono whitespace-pre-wrap leading-relaxed">{result}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <div className="flex gap-3">
               <button onClick={() => setPhase('differential')} className="flex-1 border border-gray-300 text-gray-600 py-3 rounded-xl font-bold text-sm hover:bg-gray-50 transition">← 戻る</button>
@@ -863,10 +854,15 @@ ${finalDiagnosis}
             </div>
 
             {/* 検査結果サマリー */}
-            {examResults._key_finding && (
-              <div className="bg-red-50 border border-red-100 rounded-xl p-3">
-                <p className="text-xs font-bold text-red-600">🚨 Key Finding</p>
-                <p className="text-sm text-red-800 mt-0.5">{examResults._key_finding}</p>
+            {Object.keys(examResults).length > 0 && (
+              <div className="bg-white rounded-xl shadow-sm p-4">
+                <p className="text-xs font-bold text-gray-500 mb-2">実施した検査</p>
+                <div className="flex flex-wrap gap-1">
+                  {selectedExamLabels.map(label => (
+                    <span key={label} className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">{label}</span>
+                  ))}
+                  {otherExam && <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{otherExam}</span>}
+                </div>
               </div>
             )}
 
