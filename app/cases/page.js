@@ -9,6 +9,9 @@ export default function CasesPage() {
   const { user, userProfile, loading } = useAuth();
   const router = useRouter();
 
+  // お試しモード判定
+  const [isTrialMode, setIsTrialMode] = useState(false);
+
   const [cases, setCases] = useState([]);
   const [filteredCases, setFilteredCases] = useState([]);
   const [loadingCases, setLoadingCases] = useState(true);
@@ -24,14 +27,21 @@ export default function CasesPage() {
   const [myResults, setMyResults] = useState({});
 
   useEffect(() => {
-    if (!loading && !user) {
+    // お試しモードチェック
+    const trial = sessionStorage.getItem('trial_mode') === 'true';
+    setIsTrialMode(trial);
+
+    if (!loading && !user && !trial) {
       router.push('/');
     }
   }, [user, loading, router]);
 
   useEffect(() => {
-    if (user) {
-      fetchCases();
+    const trial = sessionStorage.getItem('trial_mode') === 'true';
+    // 症例取得は常に実行
+    fetchCases();
+    // 成績取得はログイン済みユーザーのみ（お試しモードはスキップ）
+    if (user && !trial) {
       fetchMyResults();
     }
   }, [user]);
@@ -187,7 +197,7 @@ export default function CasesPage() {
           </button>
           <h1 className="text-lg font-bold text-gray-800">症例一覧</h1>
           <div className="text-sm text-gray-500">
-            挑戦 {solvedCount} / {cases.length}問
+            {isTrialMode ? 'お試しモード' : `挑戦 ${solvedCount} / ${cases.length}問`}
           </div>
         </div>
       </header>
@@ -200,14 +210,23 @@ export default function CasesPage() {
             <span className="text-sm text-gray-600">総症例数</span>
             <span className="text-lg font-bold text-blue-600">{cases.length}例</span>
           </div>
-          <div className="flex items-center justify-between py-2 border-b border-gray-100">
-            <span className="text-sm text-gray-600">挑戦済み</span>
-            <span className="text-lg font-bold text-indigo-600">{solvedCount} / {cases.length}例</span>
-          </div>
-          <div className="flex items-center justify-between py-2">
-            <span className="text-sm text-gray-600">合格（80点以上）</span>
-            <span className="text-lg font-bold text-green-600">{passedCount} / {solvedCount}例</span>
-          </div>
+          {!isTrialMode && (
+            <>
+              <div className="flex items-center justify-between py-2 border-b border-gray-100">
+                <span className="text-sm text-gray-600">挑戦済み</span>
+                <span className="text-lg font-bold text-indigo-600">{solvedCount} / {cases.length}例</span>
+              </div>
+              <div className="flex items-center justify-between py-2">
+                <span className="text-sm text-gray-600">合格（80点以上）</span>
+                <span className="text-lg font-bold text-green-600">{passedCount} / {solvedCount}例</span>
+              </div>
+            </>
+          )}
+          {isTrialMode && (
+            <div className="py-2">
+              <p className="text-xs text-gray-400 text-center">お試しモード：成績は保存されません</p>
+            </div>
+          )}
         </div>
 
         {/* ランダム選択ボタン */}
