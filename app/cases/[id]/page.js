@@ -28,6 +28,27 @@ const EXAM_LIST = [
 
 const EXAM_CATEGORIES = ['血液', '生理', '画像', 'CT', 'MRI'];
 
+// ===== アコーディオンコンポーネント =====
+function InfoAccordion({ title, children, defaultOpen = false }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="border border-gray-200 rounded-xl overflow-hidden">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition text-left"
+      >
+        <span className="text-sm font-bold text-gray-600">{title}</span>
+        <span className={`text-gray-400 text-xs transition-transform ${open ? 'rotate-180' : ''}`}>▼</span>
+      </button>
+      {open && (
+        <div className="px-4 py-3 bg-white">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function CaseDetailPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
@@ -739,6 +760,36 @@ ${finalDiagnosis}
         {/* ===== Step2：問診・診察 ===== */}
         {phase === 'interview' && (
           <>
+            {/* Step1情報の折りたたみ確認タブ */}
+            <InfoAccordion title="📋 Step1：症例情報を確認する" defaultOpen={false}>
+              {caseData.vital_signs && (
+                <div className="mb-3">
+                  <p className="text-xs font-bold text-red-600 mb-1">🚨 バイタルサイン</p>
+                  <p className="text-sm text-gray-800 whitespace-pre-wrap">{caseData.vital_signs}</p>
+                </div>
+              )}
+              {caseData.chief_complaint && (
+                <div className="mb-3">
+                  <p className="text-xs font-bold text-gray-600 mb-1">主訴</p>
+                  <p className="text-sm text-gray-800">{caseData.chief_complaint}</p>
+                </div>
+              )}
+              {caseData.history && (
+                <div className="mb-3">
+                  <p className="text-xs font-bold text-gray-600 mb-1">現病歴</p>
+                  <p className="text-sm text-gray-800 whitespace-pre-wrap">{caseData.history}</p>
+                </div>
+              )}
+              {validDifferentials.length > 0 && (
+                <div>
+                  <p className="text-xs font-bold text-gray-600 mb-1">第一印象での鑑別診断</p>
+                  {validDifferentials.map((d, i) => (
+                    <p key={i} className="text-sm text-gray-800">{i + 1}. {d}</p>
+                  ))}
+                </div>
+              )}
+            </InfoAccordion>
+
             <div className="bg-purple-50 border border-purple-100 rounded-xl p-4">
               <h3 className="font-bold text-purple-700 mb-1">Step 2：問診・診察・鑑別診断</h3>
               <p className="text-xs text-purple-600">患者または家族にAIが役を演じて応答します。診察の指示（「腹部を触らせてください」など）も入力できます。問診後、下の鑑別診断欄に現時点での診断を入力してください。</p>
@@ -849,6 +900,50 @@ ${finalDiagnosis}
         {/* ===== Step3：精査・検査 ===== */}
         {phase === 'workup' && (
           <>
+            {/* Step1・Step2情報の折りたたみ確認タブ */}
+            <InfoAccordion title="📋 Step1：症例情報を確認する" defaultOpen={false}>
+              {caseData.vital_signs && (
+                <div className="mb-3">
+                  <p className="text-xs font-bold text-red-600 mb-1">🚨 バイタルサイン</p>
+                  <p className="text-sm text-gray-800 whitespace-pre-wrap">{caseData.vital_signs}</p>
+                </div>
+              )}
+              {caseData.chief_complaint && (
+                <div className="mb-2">
+                  <p className="text-xs font-bold text-gray-600 mb-1">主訴</p>
+                  <p className="text-sm text-gray-800">{caseData.chief_complaint}</p>
+                </div>
+              )}
+              {caseData.history && (
+                <div>
+                  <p className="text-xs font-bold text-gray-600 mb-1">現病歴</p>
+                  <p className="text-sm text-gray-800 whitespace-pre-wrap">{caseData.history}</p>
+                </div>
+              )}
+            </InfoAccordion>
+
+            <InfoAccordion title="🗣️ Step2：問診・診察の記録を確認する" defaultOpen={false}>
+              {messages.length > 0 ? (
+                <div className="space-y-2">
+                  {messages.map((m, i) => (
+                    <div key={i} className={`text-xs px-3 py-2 rounded-lg ${m.role === 'resident' ? 'bg-blue-50 text-blue-800' : 'bg-gray-50 text-gray-700'}`}>
+                      <span className="font-bold">{m.role === 'resident' ? '研修医' : '患者/家族'}：</span>{m.text}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400">問診記録はありません</p>
+              )}
+              {validDifferentials.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-gray-100">
+                  <p className="text-xs font-bold text-gray-600 mb-1">鑑別診断</p>
+                  {validDifferentials.map((d, i) => (
+                    <p key={i} className="text-sm text-gray-800">{i + 1}. {d}</p>
+                  ))}
+                </div>
+              )}
+            </InfoAccordion>
+
             <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4">
               <h3 className="font-bold text-indigo-700 mb-1">Step 3：精査・検査 → 最終診断</h3>
               <p className="text-xs text-indigo-600">必要な検査を選択して「検査を実施する」を押すとAIが結果を提示します。結果確認後に最終診断を入力してください。</p>
