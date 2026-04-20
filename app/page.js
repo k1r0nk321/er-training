@@ -307,7 +307,7 @@ export default function HomePage() {
         {mode === 'trial' && (
           <div className="bg-white rounded-2xl shadow-sm p-6 space-y-4">
             <h2 className="font-bold text-gray-700">お試しモード</h2>
-            <p className="text-xs text-gray-500">共通パスワードで症例を体験できます。成績は保存されません。</p>
+            <p className="text-xs text-gray-500">共通パスワードで症例を体験できます。成績は保存されません。<br />パスワードは管理者にお問い合わせください。</p>
             <input
               type="password"
               value={trialPassword}
