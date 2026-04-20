@@ -81,6 +81,8 @@ export default function CaseDetailPage() {
 
   useEffect(() => {
     const trial = sessionStorage.getItem('trial_mode') === 'true';
+    // ログイン済みユーザーはお試しモードフラグを強制クリア
+    if (user) sessionStorage.removeItem('trial_mode');
     if (!loading && !user && !trial) router.push('/');
   }, [user, loading, router]);
 
