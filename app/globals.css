@@ -8,4 +8,28 @@
 
 html, body {
   font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+  font-size: 16px;
+}
+
+/* ===== フォーム要素：説明文と同じサイズに統一 ===== */
+input,
+textarea,
+select {
+  font-family: inherit;
+  font-size: 1rem;        /* 16px：説明文と同じ */
+  line-height: 1.5;
+  padding: 0.75rem 1rem;  /* 上下12px・左右16px */
+  color: #1f2937;         /* gray-800 */
+}
+
+/* プレースホルダーも同サイズ */
+input::placeholder,
+textarea::placeholder {
+  font-size: 1rem;
+  color: #9ca3af; /* gray-400 */
+}
+
+/* ボタンもフォントを継承 */
+button {
+  font-family: inherit;
 }
