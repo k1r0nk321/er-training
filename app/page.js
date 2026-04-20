@@ -82,7 +82,12 @@ export default function HomePage() {
     setLoginError('');
     setLoginLoading(true);
     const { error } = await signIn(email, password);
-    if (error) setLoginError('メールアドレスまたはパスワードが違います');
+    if (error) {
+      setLoginError('メールアドレスまたはパスワードが違います');
+    } else {
+      // ログイン成功時にお試しモードフラグを必ずクリア
+      sessionStorage.removeItem('trial_mode');
+    }
     setLoginLoading(false);
   };
 
