@@ -21,12 +21,22 @@ export default function HomePage() {
   const { user, userProfile, isNewUser, signIn, signOut, registerProfile, loading } = useAuth();
   const router = useRouter();
 
-  // ログインフォーム
+  // モード切替：'login' | 'signup' | 'trial'
+  const [mode, setMode] = useState('login');
+
+  // ログイン
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
-  const [mode, setMode] = useState('login');
+
+  // 新規アカウント作成
+  const [signupEmail, setSignupEmail] = useState('');
+  const [signupPassword, setSignupPassword] = useState('');
+  const [signupPasswordConfirm, setSignupPasswordConfirm] = useState('');
+  const [signupError, setSignupError] = useState('');
+  const [signupLoading, setSignupLoading] = useState(false);
+  const [signupDone, setSignupDone] = useState(false);
 
   // お試しモード
   const [trialPassword, setTrialPassword] = useState('');
@@ -62,9 +72,11 @@ export default function HomePage() {
       .select('value')
       .eq('key', 'trial_password')
       .single();
+    // パスワードはstateに保持するが画面には表示しない
     if (data) setTrialPw(data.value);
   };
 
+  // ===== ログイン =====
   const handleLogin = async (e) => {
     e?.preventDefault();
     setLoginError('');
@@ -74,6 +86,34 @@ export default function HomePage() {
     setLoginLoading(false);
   };
 
+  // ===== 新規アカウント作成 =====
+  const handleSignup = async (e) => {
+    e?.preventDefault();
+    setSignupError('');
+
+    if (!signupEmail.trim()) { setSignupError('メールアドレスを入力してください'); return; }
+    if (signupPassword.length < 8) { setSignupError('パスワードは8文字以上で設定してください'); return; }
+    if (signupPassword !== signupPasswordConfirm) { setSignupError('パスワードが一致しません'); return; }
+
+    setSignupLoading(true);
+    const { error } = await supabase.auth.signUp({
+      email: signupEmail.trim(),
+      password: signupPassword,
+    });
+
+    if (error) {
+      if (error.message.includes('already registered')) {
+        setSignupError('このメールアドレスはすでに登録されています');
+      } else {
+        setSignupError('登録に失敗しました：' + error.message);
+      }
+    } else {
+      setSignupDone(true);
+    }
+    setSignupLoading(false);
+  };
+
+  // ===== お試しモード =====
   const handleTrial = () => {
     if (trialPassword === trialPw) {
       sessionStorage.setItem('trial_mode', 'true');
@@ -83,7 +123,7 @@ export default function HomePage() {
     }
   };
 
-  // 新規ユーザー属性登録
+  // ===== 新規ユーザー属性登録 =====
   const handleRegister = async (e) => {
     e?.preventDefault();
     if (!regName.trim()) { setRegError('お名前を入力してください'); return; }
@@ -114,13 +154,13 @@ export default function HomePage() {
           <div className="text-center py-4">
             <div className="text-5xl mb-3">🏥</div>
             <h1 className="text-2xl font-black text-gray-900">ER Training</h1>
-            <p className="text-gray-500 mt-1">初回ログイン設定</p>
+            <p className="text-gray-500 mt-1">プロフィール設定（初回のみ）</p>
           </div>
 
           <div className="bg-white rounded-2xl shadow-sm p-6 space-y-5">
             <div>
               <h2 className="font-bold text-gray-800 text-lg">プロフィール登録</h2>
-              <p className="text-sm text-gray-500 mt-1">初回のみ設定が必要です。</p>
+              <p className="text-sm text-gray-500 mt-1">初回ログイン時のみ必要です。</p>
             </div>
 
             <form onSubmit={handleRegister} className="space-y-4">
@@ -213,7 +253,6 @@ export default function HomePage() {
             </button>
           </div>
 
-          {/* 管理者ダッシュボードは中前先生のみ表示 */}
           {isAdmin && (
             <button
               onClick={() => router.push('/admin')}
@@ -251,27 +290,36 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col">
       <div className="max-w-md mx-auto w-full px-4 py-10 space-y-6 flex-1">
+
         <div className="text-center py-4">
           <div className="text-5xl mb-3">🏥</div>
           <h1 className="text-3xl font-black text-gray-900">ER Training</h1>
           <p className="text-gray-500 mt-1">医仁会 臨床研修プログラム</p>
         </div>
 
+        {/* タブ切替：ログイン／新規登録／お試し */}
         <div className="bg-white rounded-2xl shadow-sm p-1 flex">
           <button
             onClick={() => setMode('login')}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition ${mode === 'login' ? 'bg-blue-600 text-white' : 'text-gray-400'}`}
+            className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition ${mode === 'login' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}
           >
             ログイン
           </button>
           <button
-            onClick={() => setMode('trial')}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition ${mode === 'trial' ? 'bg-indigo-600 text-white' : 'text-gray-400'}`}
+            onClick={() => setMode('signup')}
+            className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition ${mode === 'signup' ? 'bg-green-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}
           >
-            お試しモード
+            新規登録
+          </button>
+          <button
+            onClick={() => setMode('trial')}
+            className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition ${mode === 'trial' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}
+          >
+            お試し
           </button>
         </div>
 
+        {/* ===== ログイン ===== */}
         {mode === 'login' && (
           <div className="bg-white rounded-2xl shadow-sm p-6 space-y-4">
             <h2 className="font-bold text-gray-700">アカウントでログイン</h2>
@@ -301,17 +349,91 @@ export default function HomePage() {
                 {loginLoading ? 'ログイン中...' : 'ログイン'}
               </button>
             </form>
+            <p className="text-center text-xs text-gray-400">
+              アカウントをお持ちでない方は
+              <button onClick={() => setMode('signup')} className="text-green-600 font-bold ml-1">新規登録</button>
+            </p>
           </div>
         )}
 
+        {/* ===== 新規アカウント作成 ===== */}
+        {mode === 'signup' && (
+          <div className="bg-white rounded-2xl shadow-sm p-6 space-y-4">
+            <h2 className="font-bold text-gray-700">新規アカウント作成</h2>
+
+            {signupDone ? (
+              <div className="text-center space-y-4 py-4">
+                <div className="text-5xl">📧</div>
+                <p className="font-bold text-gray-800">確認メールを送信しました</p>
+                <p className="text-sm text-gray-500">
+                  <span className="font-bold text-blue-600">{signupEmail}</span> に確認メールを送りました。
+                  メール内のリンクをクリックしてアカウントを有効化してください。
+                </p>
+                <button
+                  onClick={() => { setSignupDone(false); setMode('login'); }}
+                  className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-blue-700 transition"
+                >
+                  ログイン画面へ
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleSignup} className="space-y-3">
+                <input
+                  type="email"
+                  value={signupEmail}
+                  onChange={e => setSignupEmail(e.target.value)}
+                  placeholder="メールアドレス"
+                  required
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+                />
+                <input
+                  type="password"
+                  value={signupPassword}
+                  onChange={e => setSignupPassword(e.target.value)}
+                  placeholder="パスワード（8文字以上）"
+                  required
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+                />
+                <input
+                  type="password"
+                  value={signupPasswordConfirm}
+                  onChange={e => setSignupPasswordConfirm(e.target.value)}
+                  placeholder="パスワード（確認）"
+                  required
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+                />
+                {signupError && <p className="text-red-500 text-xs">{signupError}</p>}
+                <button
+                  type="submit"
+                  disabled={signupLoading}
+                  className="w-full bg-green-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-green-700 disabled:opacity-50 transition"
+                >
+                  {signupLoading ? '登録中...' : 'アカウントを作成する'}
+                </button>
+              </form>
+            )}
+
+            {!signupDone && (
+              <p className="text-center text-xs text-gray-400">
+                すでにアカウントをお持ちの方は
+                <button onClick={() => setMode('login')} className="text-blue-600 font-bold ml-1">ログイン</button>
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* ===== お試しモード ===== */}
         {mode === 'trial' && (
           <div className="bg-white rounded-2xl shadow-sm p-6 space-y-4">
             <h2 className="font-bold text-gray-700">お試しモード</h2>
-            <p className="text-xs text-gray-500">共通パスワードで症例を体験できます。成績は保存されません。<br />パスワードは管理者にお問い合わせください。</p>
+            <p className="text-xs text-gray-500">
+              共通パスワードで症例を体験できます。成績は保存されません。<br />
+              パスワードは管理者にお問い合わせください。
+            </p>
             <input
               type="password"
               value={trialPassword}
-              onChange={e => setTrialPassword(e.target.value)}
+              onChange={e => { setTrialPassword(e.target.value); setTrialError(''); }}
               placeholder="共通パスワード"
               className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
               onKeyDown={e => e.key === 'Enter' && handleTrial()}
@@ -327,6 +449,7 @@ export default function HomePage() {
           </div>
         )}
 
+        {/* 重要なお知らせ */}
         {announcements.filter(a => a.important).length > 0 && (
           <div className="space-y-2">
             {announcements.filter(a => a.important).map(a => (
@@ -337,6 +460,7 @@ export default function HomePage() {
             ))}
           </div>
         )}
+
       </div>
     </div>
   );
