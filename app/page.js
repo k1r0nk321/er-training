@@ -225,7 +225,6 @@ export default function HomePage() {
           <div className="text-center py-4">
             <div className="text-4xl mb-2">🏥</div>
             <h1 className="text-2xl font-black text-gray-900">ER Training</h1>
-            <p className="text-sm text-gray-500 mt-1">医仁会 臨床研修プログラム</p>
           </div>
 
           <div className="bg-white rounded-2xl shadow-sm p-5">
@@ -294,7 +293,6 @@ export default function HomePage() {
         <div className="text-center py-4">
           <div className="text-5xl mb-3">🏥</div>
           <h1 className="text-3xl font-black text-gray-900">ER Training</h1>
-          <p className="text-gray-500 mt-1">医仁会 臨床研修プログラム</p>
         </div>
 
         {/* タブ切替：ログイン／新規登録／お試し */}
