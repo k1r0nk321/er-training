@@ -48,6 +48,14 @@ export default function CaseDetailPage() {
   const [coachingLoading, setCoachingLoading] = useState(false);
   const chatBottomRef = useRef(null);
 
+  // ===== Step3指導医コメント =====
+  const [workupCoaching, setWorkupCoaching] = useState('');
+  const [workupCoachingLoading, setWorkupCoachingLoading] = useState(false);
+  const [showWorkupCoaching, setShowWorkupCoaching] = useState(false);
+
+  // ===== 採点用スナップショット（指導コメント取得前の情報を保存） =====
+  const [scoreSnapshot, setScoreSnapshot] = useState(null); // {differentials, messages, examResults, examLabels}
+
   // ===== 鑑別診断 =====
   const [differentials, setDifferentials] = useState(['', '', '', '', '']);
   const [aiAnalysis, setAiAnalysis] = useState('');
@@ -176,9 +184,10 @@ ${conversationHistory}
 ${conversationHistory}
 
 以下を200字以内でコメント（採点なし）：
-1. 取れている重要な情報
-2. まだ聞けていない重要な点
-3. この症例で特に重要な問診のポイント`;
+1. 問診で取れている重要な情報
+2. まだ聞けていない重要な点（もしあれば）
+
+※検査・処置・診断についてのアドバイスや次のステップの提案は一切しないこと。`;
 
     try {
       const response = await fetch('/api/score', {
@@ -254,10 +263,60 @@ ${examsToRun.map((e, i) => `${i + 1}. ${e}`).join('\n')}
       const parsed = JSON.parse(text);
       setExamResults(parsed.results || {});
       setExamDone(true);
+
+      // ===== 採点用スナップショットを保存（この時点の情報が本人の実力） =====
+      setScoreSnapshot({
+        differentials: [...differentials],
+        messages: [...messages],
+        examLabels: [...selectedExamLabels, otherExam ? otherExam : null].filter(Boolean),
+        examResults: parsed.results || {},
+      });
+
     } catch (e) {
       alert('検査結果の取得に失敗しました。もう一度お試しください。');
     }
     setExamLoading(false);
+  };
+
+  // ===== Step3 指導医コメント =====
+  const handleWorkupCoaching = async () => {
+    setWorkupCoachingLoading(true);
+    setShowWorkupCoaching(true);
+    setWorkupCoaching('');
+
+    const examSummary = selectedExamLabels.join('、') + (otherExam ? `、${otherExam}` : '');
+    const resultSummary = Object.entries(examResults)
+      .map(([k, v]) => `${k}：${v}`)
+      .join('\n');
+
+    const prompt = `救急・ERの指導医として、研修医の検査選択と結果解釈の段階に対してコメントしてください。
+
+【症例】タイトル：${caseData.title}、正解：${caseData.answer_diagnosis || ''}
+
+【研修医が選択した検査】
+${examSummary || '（なし）'}
+
+【検査結果】
+${resultSummary || '（なし）'}
+
+200字以内でコメント（採点なし）：
+1. 検査選択の妥当性（良い点）
+2. 選択しておくべきだった検査（もしあれば）
+
+※次に何をすべきか・診断名・治療方針についてのアドバイスは一切しないこと。`;
+
+    try {
+      const response = await fetch('/api/score', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      });
+      const data = await response.json();
+      setWorkupCoaching(data.text || data.content || '');
+    } catch {
+      setWorkupCoaching('コメントの取得に失敗しました。');
+    }
+    setWorkupCoachingLoading(false);
   };
 
   // ===== 鑑別AIフィードバック =====
@@ -273,7 +332,12 @@ ${examsToRun.map((e, i) => `${i + 1}. ${e}`).join('\n')}
 【研修医の鑑別診断】
 ${differentials.filter(d => d.trim()).map((d, i) => `${i + 1}. ${d}`).join('\n')}
 
-150字以内で教育的フィードバック（採点なし）：良い点・見落とし・次のステップへのヒント`;
+150字以内で教育的フィードバック（採点なし）：
+- 挙げられた鑑別の妥当性（良い点）
+- 見落としていると思われる重要な鑑別（もしあれば1〜2つ）
+
+※次のステップで何をすべきかのアドバイスや、検査・処置の提案は一切しないこと。`;
+
 
     try {
       const response = await fetch('/api/score', {
@@ -290,19 +354,26 @@ ${differentials.filter(d => d.trim()).map((d, i) => `${i + 1}. ${d}`).join('\n')
     }
   };
 
-  // ===== 最終採点 =====
+  // ===== 最終採点（スナップショットの情報で採点） =====
   const handleFinalScore = async () => {
     if (!finalDiagnosis.trim()) { alert('最終診断を入力してください'); return; }
     setScoringLoading(true);
 
-    const interviewRecord = messages.length > 0
-      ? messages.map(m => `${m.role === 'resident' ? '研修医' : '患者/家族'}：${m.text}`).join('\n')
+    // スナップショットがあればそちらを優先（指導コメント前の情報）
+    const snap = scoreSnapshot || {
+      differentials,
+      messages,
+      examLabels: selectedExamLabels,
+      examResults,
+    };
+
+    const interviewRecord = snap.messages.length > 0
+      ? snap.messages.map(m => `${m.role === 'resident' ? '研修医' : '患者/家族'}：${m.text}`).join('\n')
       : '（問診なし）';
 
-    const examRecord = [
-      ...selectedExamLabels.map(label => `${label}：${examResults[label] || '（結果未取得）'}`),
-      otherExam ? `その他（${otherExam}）：${otherExamResult || examResults[`その他：${otherExam}`] || '（結果未取得）'}` : null,
-    ].filter(Boolean).join('\n') || '（精査なし）';
+    const examRecord = snap.examLabels.length > 0
+      ? snap.examLabels.map(label => `${label}：${snap.examResults[label] || '（結果あり）'}`).join('\n')
+      : '（精査なし）';
 
     const prompt = `救急・ERの指導医として研修医の症例対応を100点満点で採点してください。
 
@@ -316,7 +387,7 @@ ${interviewRecord}
 ${examRecord}
 
 【鑑別診断】
-${differentials.filter(d => d.trim()).map((d, i) => `${i + 1}. ${d}`).join('\n') || '（未入力）'}
+${snap.differentials.filter(d => d.trim()).map((d, i) => `${i + 1}. ${d}`).join('\n') || '（未入力）'}
 
 【最終診断】
 ${finalDiagnosis}
@@ -384,8 +455,8 @@ ${finalDiagnosis}
 
   const getDifficultyLabel = (d) => ({ easy: '易', medium: '中', hard: '難' }[d] || '中');
 
-  const phaseLabels = ['症例確認', '問診・診察・鑑別', '精査・検査', '最終診断'];
-  const phaseOrder = ['info', 'interview', 'workup', 'diagnosis'];
+  const phaseLabels = ['症例確認', '問診・診察・鑑別', '精査・検査・最終診断'];
+  const phaseOrder = ['info', 'interview', 'workup'];
   const currentIdx = phaseOrder.indexOf(phase);
 
   const resetAll = () => {
@@ -402,6 +473,9 @@ ${finalDiagnosis}
     setScoreResult(null);
     setInterviewCoaching('');
     setShowCoaching(false);
+    setWorkupCoaching('');
+    setShowWorkupCoaching(false);
+    setScoreSnapshot(null);
   };
 
   if (loading || loadingCase) {
@@ -548,7 +622,7 @@ ${finalDiagnosis}
                   <div className={`w-full text-center text-xs py-1 rounded font-medium transition ${isActive ? 'bg-blue-600 text-white' : isDone ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
                     {isDone ? '✓ ' : ''}{label}
                   </div>
-                  {i < 3 && <span className="text-gray-300 text-xs">›</span>}
+                  {i < 2 && <span className="text-gray-300 text-xs">›</span>}
                 </div>
               );
             })}
@@ -597,6 +671,23 @@ ${finalDiagnosis}
               <p className="text-sm text-blue-800 font-medium">🏥 患者が到着しました。問診・診察を開始してください。</p>
               <p className="text-xs text-blue-600 mt-1">次のステップで患者/家族にAIが代わりに応答します。</p>
             </div>
+
+            {/* Step1でも鑑別診断入力可（任意） */}
+            <div className="bg-white rounded-xl shadow-sm p-4">
+              <h3 className="font-bold text-gray-700 text-sm mb-1">第一印象での鑑別診断（任意）</h3>
+              <p className="text-xs text-gray-400 mb-3">バイタル・主訴から現時点で考える鑑別を入力できます。未記入でも進めます。</p>
+              <div className="space-y-2">
+                {differentials.map((d, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-gray-400 w-5">{i + 1}</span>
+                    <input type="text" value={d} onChange={e => updateDifferential(i, e.target.value)}
+                      placeholder={i === 0 ? '最も可能性が高い診断名' : `鑑別診断 ${i + 1}`}
+                      className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                  </div>
+                ))}
+              </div>
+            </div>
+
             <button onClick={() => setPhase('interview')} className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold text-base hover:bg-blue-700 transition">
               問診・診察を開始する →
             </button>
@@ -717,8 +808,8 @@ ${finalDiagnosis}
         {phase === 'workup' && (
           <>
             <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4">
-              <h3 className="font-bold text-indigo-700 mb-1">Step 3：精査・検査</h3>
-              <p className="text-xs text-indigo-600">必要な検査を選択して「検査を実施する」を押すとAIが結果を提示します。</p>
+              <h3 className="font-bold text-indigo-700 mb-1">Step 3：精査・検査 → 最終診断</h3>
+              <p className="text-xs text-indigo-600">必要な検査を選択して「検査を実施する」を押すとAIが結果を提示します。結果確認後に最終診断を入力してください。</p>
             </div>
 
             {/* 鑑別診断サマリー（入力済みの場合） */}
@@ -821,60 +912,57 @@ ${finalDiagnosis}
               )}
             </div>
 
-            <div className="flex gap-3">
-              <button onClick={() => setPhase('interview')} className="flex-1 border border-gray-300 text-gray-600 py-3 rounded-xl font-bold text-sm hover:bg-gray-50 transition">← 戻る</button>
-              <button
-                onClick={() => setPhase('diagnosis')}
-                disabled={!examDone}
-                className="flex-grow bg-blue-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-blue-700 disabled:opacity-40 transition"
-              >
-                最終診断へ →
-              </button>
-            </div>
-          </>
-        )}
+            {/* 最終診断：検査結果の下に統合 */}
+            {examDone && (
+              <>
+                {/* Step3 指導医コメント（任意） */}
+                <button
+                  onClick={handleWorkupCoaching}
+                  disabled={workupCoachingLoading}
+                  className="w-full border border-purple-400 text-purple-600 py-3 rounded-xl font-bold text-sm hover:bg-purple-50 disabled:opacity-40 transition"
+                >
+                  {workupCoachingLoading ? '指導コメント取得中...' : '👨‍⚕️ 指導医からコメントをもらう（任意）'}
+                </button>
+                {showWorkupCoaching && workupCoaching && (
+                  <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
+                    <h4 className="font-bold text-purple-700 text-sm mb-2">👨‍⚕️ 指導医からのコメント</h4>
+                    <p className="text-sm text-purple-800 whitespace-pre-wrap">{workupCoaching}</p>
+                  </div>
+                )}
 
-        {/* ===== Step5：最終診断 ===== */}
-        {phase === 'diagnosis' && (
-          <>
-            <div className="bg-green-50 border border-green-100 rounded-xl p-4">
-              <h3 className="font-bold text-green-700 mb-1">Step 5：最終診断</h3>
-              <p className="text-xs text-green-600">問診・精査を踏まえた最終的な診断名を入力してください</p>
-            </div>
-
-            {/* 検査結果サマリー */}
-            {Object.keys(examResults).length > 0 && (
-              <div className="bg-white rounded-xl shadow-sm p-4">
-                <p className="text-xs font-bold text-gray-500 mb-2">実施した検査</p>
-                <div className="flex flex-wrap gap-1">
-                  {selectedExamLabels.map(label => (
-                    <span key={label} className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">{label}</span>
-                  ))}
-                  {otherExam && <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{otherExam}</span>}
+                <div className="bg-green-50 border border-green-100 rounded-xl p-4">
+                  <h3 className="font-bold text-green-700 mb-1">最終診断</h3>
+                  <p className="text-xs text-green-600">検査結果を踏まえた最終的な診断名を入力してください</p>
                 </div>
-              </div>
+                <div className="bg-white rounded-xl shadow-sm p-4">
+                  <input
+                    type="text"
+                    value={finalDiagnosis}
+                    onChange={e => setFinalDiagnosis(e.target.value)}
+                    placeholder="診断名を入力してください"
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-base font-bold focus:outline-none focus:ring-2 focus:ring-green-300"
+                  />
+                </div>
+              </>
             )}
 
-            <div className="bg-white rounded-xl shadow-sm p-4">
-              <input
-                type="text"
-                value={finalDiagnosis}
-                onChange={e => setFinalDiagnosis(e.target.value)}
-                placeholder="例：くも膜下出血（SAH）"
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-base font-bold focus:outline-none focus:ring-2 focus:ring-green-300"
-              />
-            </div>
             <div className="flex gap-3">
-              <button onClick={() => setPhase('workup')} className="flex-1 border border-gray-300 text-gray-600 py-3 rounded-xl font-bold text-sm hover:bg-gray-50 transition">← 戻る</button>
-              <button
-                onClick={handleFinalScore}
-                disabled={!finalDiagnosis.trim() || scoringLoading}
-                className="flex-grow bg-green-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-green-700 disabled:opacity-40 transition flex items-center justify-center gap-2"
-              >
-                {scoringLoading ? (
-                  <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>採点中...</>
-                ) : '🎯 採点する'}
-              </button>
+              <button onClick={() => setPhase('interview')} className="flex-1 border border-gray-300 text-gray-600 py-3 rounded-xl font-bold text-sm hover:bg-gray-50 transition">← 戻る</button>
+              {examDone ? (
+                <button
+                  onClick={handleFinalScore}
+                  disabled={!finalDiagnosis.trim() || scoringLoading}
+                  className="flex-grow bg-green-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-green-700 disabled:opacity-40 transition flex items-center justify-center gap-2"
+                >
+                  {scoringLoading ? (
+                    <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>採点中...</>
+                  ) : '🎯 採点する'}
+                </button>
+              ) : (
+                <div className="flex-grow bg-gray-100 text-gray-400 py-3 rounded-xl font-bold text-sm text-center">
+                  検査を実施すると最終診断が入力できます
+                </div>
+              )}
             </div>
           </>
         )}
