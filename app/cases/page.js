@@ -144,6 +144,16 @@ export default function CasesPage() {
     router.push(`/cases/${randomCase.id}`);
   };
 
+  const handleRandomFailed = () => {
+    const failed = filteredCases.filter(c => myResults[c.id] && !myResults[c.id].passed);
+    if (failed.length === 0) {
+      alert('不合格の症例はありません！');
+      return;
+    }
+    const randomCase = failed[Math.floor(Math.random() * failed.length)];
+    router.push(`/cases/${randomCase.id}`);
+  };
+
   const getDifficultyLabel = (d) => {
     const labels = { easy: '易', medium: '中', hard: '難' };
     return labels[d] || '中';
@@ -235,20 +245,27 @@ export default function CasesPage() {
         </div>
 
         {/* ランダム選択ボタン */}
-        <div className="flex gap-3 mb-5">
+        <div className="grid grid-cols-2 gap-3 mb-5">
           <button
             onClick={handleRandomSelect}
             disabled={filteredCases.length === 0}
-            className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-blue-700 active:bg-blue-800 disabled:opacity-40 transition"
+            className="bg-blue-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-blue-700 active:bg-blue-800 disabled:opacity-40 transition"
           >
             🎲 ランダムに挑戦
           </button>
           <button
             onClick={handleRandomUnsolved}
-            disabled={filteredCases.length === 0}
-            className="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-40 transition"
+            disabled={filteredCases.length === 0 || isTrialMode}
+            className="bg-indigo-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-40 transition"
           >
             🌟 未解答からランダム
+          </button>
+          <button
+            onClick={handleRandomFailed}
+            disabled={filteredCases.length === 0 || isTrialMode}
+            className="col-span-2 bg-orange-500 text-white py-3 rounded-xl font-bold text-sm hover:bg-orange-600 active:bg-orange-700 disabled:opacity-40 transition"
+          >
+            🔁 不合格からランダム
           </button>
         </div>
 
