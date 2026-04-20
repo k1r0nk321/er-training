@@ -422,18 +422,22 @@ ${finalDiagnosis}
       setScoreResult(parsed);
       setPhase('result');
 
-      await supabase.from('results').insert({
-        user_id: user.id,
-        case_id: caseId,
-        differentials: differentials.filter(d => d.trim()),
-        workup_plan: [...selectedExamLabels, otherExam].filter(Boolean).join('、'),
-        final_diagnosis: finalDiagnosis,
-        score: parsed.score,
-        passed: parsed.passed,
-        feedback: parsed,
-        created_at: new Date().toISOString(),
-      });
-      fetchPrevResults();
+      // お試しモードでなければ成績を保存
+      const isTrial = sessionStorage.getItem('trial_mode') === 'true';
+      if (!isTrial && user) {
+        await supabase.from('results').insert({
+          user_id: user.id,
+          case_id: caseId,
+          differentials: snap.differentials.filter(d => d.trim()),
+          workup_plan: snap.examLabels.join('、'),
+          final_diagnosis: finalDiagnosis,
+          score: parsed.score,
+          passed: parsed.passed,
+          feedback: parsed,
+          created_at: new Date().toISOString(),
+        });
+        fetchPrevResults();
+      }
     } catch {
       alert('採点に失敗しました。もう一度お試しください。');
     }
@@ -521,6 +525,9 @@ ${finalDiagnosis}
             <div className={`inline-block px-4 py-1 rounded-full text-sm font-bold ${scoreResult.passed ? 'bg-white text-blue-600' : 'bg-white text-gray-600'}`}>
               {scoreResult.passed ? '✅ 合格（80点以上）' : '❌ 不合格（再挑戦推奨）'}
             </div>
+            {sessionStorage.getItem('trial_mode') === 'true' && (
+              <p className="text-xs text-white/70 mt-2">※ お試しモードのため成績は保存されません</p>
+            )}
           </div>
 
           {/* 内訳 */}
