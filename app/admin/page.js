@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '../lib/auth-context';
 import { supabase } from '../lib/supabase';
 
+const ADMIN_EMAIL = 'nakamae@mub.biglobe.ne.jp';
+
 export default function AdminPage() {
   const { user, userProfile, loading } = useAuth();
   const router = useRouter();
@@ -34,7 +36,8 @@ export default function AdminPage() {
   useEffect(() => {
     if (!loading) {
       if (!user) { router.push('/'); return; }
-      if (userProfile && !userProfile.is_admin) {
+      // 管理者チェック：メールアドレスとis_adminの両方を確認
+      if (user.email !== ADMIN_EMAIL) {
         router.push('/');
         return;
       }
@@ -184,7 +187,7 @@ export default function AdminPage() {
     );
   }
 
-  if (userProfile && !userProfile.is_admin) {
+  if (user && user.email !== ADMIN_EMAIL) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <p className="text-gray-500">管理者権限が必要です</p>
