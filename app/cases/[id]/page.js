@@ -80,13 +80,20 @@ export default function CaseDetailPage() {
   const [prevResults, setPrevResults] = useState([]);
 
   useEffect(() => {
-    if (!loading && !user) router.push('/');
+    const trial = sessionStorage.getItem('trial_mode') === 'true';
+    if (!loading && !user && !trial) router.push('/');
   }, [user, loading, router]);
 
   useEffect(() => {
+    const trial = sessionStorage.getItem('trial_mode') === 'true';
+    // ログイン済みユーザー
     if (user && caseId) {
       fetchCase();
       fetchPrevResults();
+    }
+    // お試しモード（userがnullでも症例取得）
+    if (!user && trial && caseId) {
+      fetchCase();
     }
   }, [user, caseId]);
 
