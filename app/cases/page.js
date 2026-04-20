@@ -195,24 +195,18 @@ export default function CasesPage() {
       <div className="max-w-4xl mx-auto px-4 py-6">
 
         {/* 自分の成績サマリー */}
-        <div className="bg-white rounded-xl shadow-sm p-4 mb-5 flex gap-4">
-          <div className="flex-1 text-center">
-            <div className="text-2xl font-bold text-blue-600">{cases.length}</div>
-            <div className="text-xs text-gray-500">総症例数</div>
+        <div className="bg-white rounded-xl shadow-sm p-4 mb-5 space-y-2">
+          <div className="flex items-center justify-between py-2 border-b border-gray-100">
+            <span className="text-sm text-gray-600">総症例数</span>
+            <span className="text-lg font-bold text-blue-600">{cases.length}例</span>
           </div>
-          <div className="flex-1 text-center">
-            <div className="text-2xl font-bold text-indigo-600">{solvedCount}</div>
-            <div className="text-xs text-gray-500">挑戦済み</div>
-            <div className="text-xs text-gray-400">（合否問わず）</div>
+          <div className="flex items-center justify-between py-2 border-b border-gray-100">
+            <span className="text-sm text-gray-600">挑戦済み</span>
+            <span className="text-lg font-bold text-indigo-600">{solvedCount} / {cases.length}例</span>
           </div>
-          <div className="flex-1 text-center">
-            <div className="text-2xl font-bold text-green-600">{passedCount}</div>
-            <div className="text-xs text-gray-500">合格</div>
-            <div className="text-xs text-gray-400">（80点以上）</div>
-          </div>
-          <div className="flex-1 text-center">
-            <div className="text-2xl font-bold text-orange-600">{cases.length - solvedCount}</div>
-            <div className="text-xs text-gray-500">未挑戦</div>
+          <div className="flex items-center justify-between py-2">
+            <span className="text-sm text-gray-600">合格（80点以上）</span>
+            <span className="text-lg font-bold text-green-600">{passedCount} / {solvedCount}例</span>
           </div>
         </div>
 
