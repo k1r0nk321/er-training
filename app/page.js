@@ -47,6 +47,14 @@ export default function HomePage() {
   const [trialPw, setTrialPw] = useState('');
   const [showTrialPw, setShowTrialPw] = useState(false);
 
+  // プロフィール編集
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editRole, setEditRole] = useState('');
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState('');
+  const [editSuccess, setEditSuccess] = useState(false);
+
   // 新規ユーザー属性登録
   const [regName, setRegName] = useState('');
   const [regRole, setRegRole] = useState('');
@@ -144,7 +152,35 @@ export default function HomePage() {
     setRegLoading(false);
   };
 
-  if (loading) {
+  // ===== プロフィール更新 =====
+  const handleUpdateProfile = async (e) => {
+    e?.preventDefault();
+    if (!editName.trim()) { setEditError('お名前を入力してください'); return; }
+    if (!editRole) { setEditError('身分を選択してください'); return; }
+    setEditLoading(true);
+    setEditError('');
+    setEditSuccess(false);
+    const { error } = await supabase
+      .from('users')
+      .update({ name: editName.trim(), role: editRole })
+      .eq('id', user.id);
+    if (error) {
+      setEditError('更新に失敗しました。もう一度お試しください。');
+    } else {
+      setEditSuccess(true);
+      // auth-contextのuserProfileを再取得するためページをリロード
+      setTimeout(() => window.location.reload(), 800);
+    }
+    setEditLoading(false);
+  };
+
+  const startEditProfile = () => {
+    setEditName(userProfile.name || '');
+    setEditRole(userProfile.role || '');
+    setEditError('');
+    setEditSuccess(false);
+    setEditingProfile(true);
+  };
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
         <div className="text-center">
@@ -237,11 +273,77 @@ export default function HomePage() {
             <h1 className="text-2xl font-black text-gray-900">ER Training</h1>
           </div>
 
-          <div className="bg-white rounded-2xl shadow-sm p-5">
-            <p className="text-sm text-gray-500">ようこそ</p>
-            <p className="text-xl font-bold text-gray-900 mt-0.5">{userProfile.name} 先生</p>
-            <p className="text-sm text-blue-600">{userProfile.role}</p>
-          </div>
+          {/* プロフィールカード */}
+          {!editingProfile ? (
+            <div className="bg-white rounded-2xl shadow-sm p-5">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-sm text-gray-500">ようこそ</p>
+                  <p className="text-xl font-bold text-gray-900 mt-0.5">{userProfile.name} 先生</p>
+                  <p className="text-sm text-blue-600">{userProfile.role}</p>
+                </div>
+                <button
+                  onClick={startEditProfile}
+                  className="text-xs text-gray-400 hover:text-blue-600 border border-gray-200 hover:border-blue-300 px-3 py-1.5 rounded-lg transition"
+                >
+                  ✏️ 編集
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-white rounded-2xl shadow-sm p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-gray-800">プロフィール編集</h3>
+                <button
+                  onClick={() => setEditingProfile(false)}
+                  className="text-xs text-gray-400 hover:text-gray-600"
+                >
+                  ✕ キャンセル
+                </button>
+              </div>
+              <form onSubmit={handleUpdateProfile} className="space-y-4">
+                <div>
+                  <label className="text-sm font-bold text-gray-700 mb-1 block">お名前 *</label>
+                  <p className="text-xs text-orange-600 mb-2">⚠️ 2次配布防止のため、実名でご登録ください。</p>
+                  <input
+                    type="text"
+                    value={editName}
+                    onChange={e => setEditName(e.target.value)}
+                    placeholder="例：山田 太郎"
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-bold text-gray-700 mb-2 block">身分 *</label>
+                  <div className="space-y-2">
+                    {ROLE_OPTIONS.map(opt => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setEditRole(opt.value)}
+                        className={`w-full text-left px-4 py-3 rounded-xl border text-sm font-medium transition ${
+                          editRole === opt.value
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'bg-white text-gray-700 border-gray-200 hover:border-blue-300 hover:bg-blue-50'
+                        }`}
+                      >
+                        {editRole === opt.value ? '✓ ' : ''}{opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {editError && <p className="text-red-500 text-xs">{editError}</p>}
+                {editSuccess && <p className="text-green-600 text-xs font-bold">✅ 更新しました！</p>}
+                <button
+                  type="submit"
+                  disabled={editLoading || !editName.trim() || !editRole}
+                  className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-blue-700 disabled:opacity-50 transition"
+                >
+                  {editLoading ? '更新中...' : '保存する'}
+                </button>
+              </form>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <button
