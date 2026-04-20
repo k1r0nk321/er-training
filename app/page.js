@@ -29,6 +29,7 @@ export default function HomePage() {
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
+  const [showLoginPw, setShowLoginPw] = useState(false);
 
   // 新規アカウント作成
   const [signupEmail, setSignupEmail] = useState('');
@@ -37,11 +38,14 @@ export default function HomePage() {
   const [signupError, setSignupError] = useState('');
   const [signupLoading, setSignupLoading] = useState(false);
   const [signupDone, setSignupDone] = useState(false);
+  const [showSignupPw, setShowSignupPw] = useState(false);
+  const [showSignupPwConfirm, setShowSignupPwConfirm] = useState(false);
 
   // お試しモード
   const [trialPassword, setTrialPassword] = useState('');
   const [trialError, setTrialError] = useState('');
   const [trialPw, setTrialPw] = useState('');
+  const [showTrialPw, setShowTrialPw] = useState(false);
 
   // 新規ユーザー属性登録
   const [regName, setRegName] = useState('');
@@ -336,14 +340,24 @@ export default function HomePage() {
                 required
                 className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
               />
-              <input
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="パスワード"
-                required
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-              />
+              <div className="relative">
+                <input
+                  type={showLoginPw ? 'text' : 'password'}
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="パスワード"
+                  required
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowLoginPw(v => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs px-1"
+                  tabIndex={-1}
+                >
+                  {showLoginPw ? '隠す' : '表示'}
+                </button>
+              </div>
               {loginError && <p className="text-red-500 text-xs">{loginError}</p>}
               <button
                 type="submit"
@@ -390,22 +404,42 @@ export default function HomePage() {
                   required
                   className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
                 />
-                <input
-                  type="password"
-                  value={signupPassword}
-                  onChange={e => setSignupPassword(e.target.value)}
-                  placeholder="パスワード（8文字以上）"
-                  required
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
-                />
-                <input
-                  type="password"
-                  value={signupPasswordConfirm}
-                  onChange={e => setSignupPasswordConfirm(e.target.value)}
-                  placeholder="パスワード（確認）"
-                  required
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
-                />
+                <div className="relative">
+                  <input
+                    type={showSignupPw ? 'text' : 'password'}
+                    value={signupPassword}
+                    onChange={e => setSignupPassword(e.target.value)}
+                    placeholder="パスワード（8文字以上）"
+                    required
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSignupPw(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs px-1"
+                    tabIndex={-1}
+                  >
+                    {showSignupPw ? '隠す' : '表示'}
+                  </button>
+                </div>
+                <div className="relative">
+                  <input
+                    type={showSignupPwConfirm ? 'text' : 'password'}
+                    value={signupPasswordConfirm}
+                    onChange={e => setSignupPasswordConfirm(e.target.value)}
+                    placeholder="パスワード（確認）"
+                    required
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSignupPwConfirm(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs px-1"
+                    tabIndex={-1}
+                  >
+                    {showSignupPwConfirm ? '隠す' : '表示'}
+                  </button>
+                </div>
                 {signupError && <p className="text-red-500 text-xs">{signupError}</p>}
                 <button
                   type="submit"
@@ -434,14 +468,24 @@ export default function HomePage() {
               共通パスワードで症例を体験できます。成績は保存されません。<br />
               パスワードは管理者にお問い合わせください。
             </p>
-            <input
-              type="password"
-              value={trialPassword}
-              onChange={e => { setTrialPassword(e.target.value); setTrialError(''); }}
-              placeholder="共通パスワード"
-              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
-              onKeyDown={e => e.key === 'Enter' && handleTrial()}
-            />
+            <div className="relative">
+              <input
+                type={showTrialPw ? 'text' : 'password'}
+                value={trialPassword}
+                onChange={e => { setTrialPassword(e.target.value); setTrialError(''); }}
+                placeholder="共通パスワード"
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                onKeyDown={e => e.key === 'Enter' && handleTrial()}
+              />
+              <button
+                type="button"
+                onClick={() => setShowTrialPw(v => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs px-1"
+                tabIndex={-1}
+              >
+                {showTrialPw ? '隠す' : '表示'}
+              </button>
+            </div>
             {trialError && <p className="text-red-500 text-xs">{trialError}</p>}
             <button
               onClick={handleTrial}
