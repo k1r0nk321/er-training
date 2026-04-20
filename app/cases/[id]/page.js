@@ -6,7 +6,7 @@ import { useAuth } from '../../lib/auth-context';
 import { supabase } from '../../lib/supabase';
 
 // フェーズ定義
-// 'info' → 'interview' → 'differential' → 'workup' → 'diagnosis' → 'result'
+// 'info' → 'interview'（問診＋鑑別診断） → 'workup' → 'diagnosis' → 'result'
 
 // 検査リスト定義
 const EXAM_LIST = [
@@ -384,8 +384,8 @@ ${finalDiagnosis}
 
   const getDifficultyLabel = (d) => ({ easy: '易', medium: '中', hard: '難' }[d] || '中');
 
-  const phaseLabels = ['症例確認', '問診・診察', '鑑別診断', '精査・検査', '最終診断'];
-  const phaseOrder = ['info', 'interview', 'differential', 'workup', 'diagnosis'];
+  const phaseLabels = ['症例確認', '問診・診察・鑑別', '精査・検査', '最終診断'];
+  const phaseOrder = ['info', 'interview', 'workup', 'diagnosis'];
   const currentIdx = phaseOrder.indexOf(phase);
 
   const resetAll = () => {
@@ -456,8 +456,8 @@ ${finalDiagnosis}
               <div className="space-y-2">
                 {[
                   { label: '問診・診察', key: 'interview', max: 25 },
-                  { label: '精査・検査選択', key: 'workup', max: 25 },
                   { label: '鑑別診断', key: 'differential', max: 25 },
+                  { label: '精査・検査', key: 'workup', max: 25 },
                   { label: '最終診断', key: 'final_diagnosis', max: 25 },
                 ].map(item => (
                   <div key={item.key} className="flex items-center gap-3">
@@ -548,7 +548,7 @@ ${finalDiagnosis}
                   <div className={`w-full text-center text-xs py-1 rounded font-medium transition ${isActive ? 'bg-blue-600 text-white' : isDone ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
                     {isDone ? '✓ ' : ''}{label}
                   </div>
-                  {i < 4 && <span className="text-gray-300 text-xs">›</span>}
+                  {i < 3 && <span className="text-gray-300 text-xs">›</span>}
                 </div>
               );
             })}
@@ -607,8 +607,8 @@ ${finalDiagnosis}
         {phase === 'interview' && (
           <>
             <div className="bg-purple-50 border border-purple-100 rounded-xl p-4">
-              <h3 className="font-bold text-purple-700 mb-1">Step 2：問診・診察フェーズ</h3>
-              <p className="text-xs text-purple-600">患者または家族にAIが役を演じて応答します。診察の指示（「腹部を触らせてください」など）も入力できます。</p>
+              <h3 className="font-bold text-purple-700 mb-1">Step 2：問診・診察・鑑別診断</h3>
+              <p className="text-xs text-purple-600">患者または家族にAIが役を演じて応答します。診察の指示（「腹部を触らせてください」など）も入力できます。問診後、下の鑑別診断欄に現時点での診断を入力してください。</p>
             </div>
             <div className="bg-white rounded-xl shadow-sm overflow-hidden">
               <div className="bg-gray-800 px-4 py-2 flex items-center gap-2">
@@ -677,32 +677,11 @@ ${finalDiagnosis}
                 <p className="text-sm text-purple-800 whitespace-pre-wrap">{interviewCoaching}</p>
               </div>
             )}
-            <div className="flex gap-3">
-              <button onClick={() => setPhase('info')} className="flex-1 border border-gray-300 text-gray-600 py-3 rounded-xl font-bold text-sm hover:bg-gray-50 transition">← 戻る</button>
-              <button onClick={() => setPhase('differential')} className="flex-grow bg-blue-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-blue-700 transition">
-                診察完了 → 鑑別診断へ
-              </button>
-            </div>
-          </>
-        )}
-
-        {/* ===== Step3：鑑別診断 ===== */}
-        {phase === 'differential' && (
-          <>
+            {/* 鑑別診断：Step2内に統合 */}
             <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
-              <h3 className="font-bold text-blue-700 mb-1">Step 3：鑑別診断</h3>
-              <p className="text-xs text-blue-600">問診・診察を踏まえて鑑別診断を最大5つ挙げてください（優先順）</p>
+              <h3 className="font-bold text-blue-700 mb-1">現時点での鑑別診断（任意）</h3>
+              <p className="text-xs text-blue-600">問診・診察を踏まえた現時点での鑑別を入力してください。未記入のまま次へ進むこともできます。</p>
             </div>
-            {messages.length > 0 && (
-              <div className="bg-white rounded-xl shadow-sm p-4">
-                <p className="text-xs font-bold text-gray-400 mb-2">問診・診察で得られた情報</p>
-                <div className="space-y-1 max-h-28 overflow-y-auto">
-                  {messages.filter(m => m.role === 'patient').map((m, i) => (
-                    <p key={i} className="text-xs text-gray-600 bg-gray-50 rounded px-2 py-1">{m.text}</p>
-                  ))}
-                </div>
-              </div>
-            )}
             <div className="bg-white rounded-xl shadow-sm p-4 space-y-3">
               {differentials.map((d, i) => (
                 <div key={i} className="flex items-center gap-2">
@@ -713,10 +692,10 @@ ${finalDiagnosis}
                 </div>
               ))}
             </div>
-            {!analysisDone && (
-              <button onClick={handleAnalyzeDifferentials} disabled={validDifferentials.length === 0}
-                className="w-full border border-blue-400 text-blue-600 py-3 rounded-xl font-bold text-sm hover:bg-blue-50 disabled:opacity-40 transition">
-                🤖 AIにフィードバックをもらう（任意）
+            {!analysisDone && validDifferentials.length > 0 && (
+              <button onClick={handleAnalyzeDifferentials}
+                className="w-full border border-blue-400 text-blue-600 py-3 rounded-xl font-bold text-sm hover:bg-blue-50 transition">
+                🤖 鑑別診断にAIフィードバックをもらう（任意）
               </button>
             )}
             {aiAnalysis && (
@@ -726,22 +705,33 @@ ${finalDiagnosis}
               </div>
             )}
             <div className="flex gap-3">
-              <button onClick={() => setPhase('interview')} className="flex-1 border border-gray-300 text-gray-600 py-3 rounded-xl font-bold text-sm hover:bg-gray-50 transition">← 戻る</button>
-              <button onClick={() => setPhase('workup')} disabled={validDifferentials.length === 0}
-                className="flex-grow bg-blue-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-blue-700 disabled:opacity-40 transition">
+              <button onClick={() => setPhase('info')} className="flex-1 border border-gray-300 text-gray-600 py-3 rounded-xl font-bold text-sm hover:bg-gray-50 transition">← 戻る</button>
+              <button onClick={() => setPhase('workup')} className="flex-grow bg-blue-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-blue-700 transition">
                 精査・検査へ →
               </button>
             </div>
           </>
         )}
 
-        {/* ===== Step4：精査・検査（新UI） ===== */}
+        {/* ===== Step3：精査・検査 ===== */}
         {phase === 'workup' && (
           <>
             <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4">
-              <h3 className="font-bold text-indigo-700 mb-1">Step 4：精査・検査</h3>
+              <h3 className="font-bold text-indigo-700 mb-1">Step 3：精査・検査</h3>
               <p className="text-xs text-indigo-600">必要な検査を選択して「検査を実施する」を押すとAIが結果を提示します。</p>
             </div>
+
+            {/* 鑑別診断サマリー（入力済みの場合） */}
+            {validDifferentials.length > 0 && (
+              <div className="bg-white rounded-xl shadow-sm p-3">
+                <p className="text-xs font-bold text-gray-400 mb-1">現時点の鑑別診断</p>
+                <div className="flex flex-wrap gap-1">
+                  {validDifferentials.map((d, i) => (
+                    <span key={i} className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{i+1}. {d}</span>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* 検査チェックボックス */}
             <div className="bg-white rounded-xl shadow-sm p-4">
@@ -759,8 +749,7 @@ ${finalDiagnosis}
                             : 'bg-white text-gray-700 border-gray-200 hover:border-indigo-300 hover:bg-indigo-50'
                         }`}
                       >
-                        <span className="flex-shrink-0 w-5 h-5 rounded border flex items-center justify-center text-xs
-                          ${selectedExams[exam.id] ? 'bg-white border-white text-indigo-600' : 'border-gray-300'}">
+                        <span className="flex-shrink-0 w-5 h-5 rounded border flex items-center justify-center text-xs">
                           {selectedExams[exam.id] ? '✓' : ''}
                         </span>
                         {exam.label}
@@ -833,7 +822,7 @@ ${finalDiagnosis}
             </div>
 
             <div className="flex gap-3">
-              <button onClick={() => setPhase('differential')} className="flex-1 border border-gray-300 text-gray-600 py-3 rounded-xl font-bold text-sm hover:bg-gray-50 transition">← 戻る</button>
+              <button onClick={() => setPhase('interview')} className="flex-1 border border-gray-300 text-gray-600 py-3 rounded-xl font-bold text-sm hover:bg-gray-50 transition">← 戻る</button>
               <button
                 onClick={() => setPhase('diagnosis')}
                 disabled={!examDone}
