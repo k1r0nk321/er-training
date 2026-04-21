@@ -58,6 +58,17 @@ export default function CasesPage() {
     }
   }, [user]);
 
+  // ページに戻ったとき（症例詳細から戻るなど）に成績を再取得
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && user) {
+        fetchMyResults();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [user]);
+
   useEffect(() => {
     applyFilter();
   }, [cases, searchText, selectedDifficulty, selectedCategory, sortOrder]);
@@ -82,7 +93,7 @@ export default function CasesPage() {
     if (!user) return;
     const { data } = await supabase
       .from('results')
-      .select('case_id, score, passed')
+      .select('case_id, score, passed, created_at')
       .eq('user_id', user.id);
 
     if (data) {
