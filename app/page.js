@@ -73,18 +73,30 @@ export default function HomePage() {
   const [trialError, setTrialError] = useState('');
   const [trialPw, setTrialPw] = useState('');
   const [showTrialPw, setShowTrialPw] = useState(false);
+
+  // プロフィール編集
   const [editingProfile, setEditingProfile] = useState(false);
   const [editName, setEditName] = useState('');
   const [editRole, setEditRole] = useState('');
+  const [editDepartment, setEditDepartment] = useState('');
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState('');
   const [editSuccess, setEditSuccess] = useState(false);
+
+  // 新規登録
   const [regName, setRegName] = useState('');
   const [regRole, setRegRole] = useState('');
+  const [regDepartment, setRegDepartment] = useState('');
   const [regLoading, setRegLoading] = useState(false);
   const [regError, setRegError] = useState('');
   const [termsAgreed, setTermsAgreed] = useState(false);
   const [showTerms, setShowTerms] = useState(false);
+
+  // アカウント削除
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteInput, setDeleteInput] = useState('');
+
   const [announcements, setAnnouncements] = useState([]);
 
   useEffect(() => {
@@ -157,8 +169,17 @@ export default function HomePage() {
     if (!termsAgreed) { setRegError('利用規約に同意してください'); return; }
     setRegLoading(true);
     setRegError('');
+    // registerProfileで基本情報を登録後、departmentを更新
     const { error } = await registerProfile(regName.trim(), regRole);
-    if (error) setRegError('登録に失敗しました。もう一度お試しください。');
+    if (error) {
+      setRegError('登録に失敗しました。もう一度お試しください。');
+    } else if (regDepartment.trim()) {
+      // 所属がある場合は追加更新
+      await supabase
+        .from('users')
+        .update({ department: regDepartment.trim() })
+        .eq('id', user.id);
+    }
     setRegLoading(false);
   };
 
@@ -171,7 +192,11 @@ export default function HomePage() {
     setEditSuccess(false);
     const { error } = await supabase
       .from('users')
-      .update({ name: editName.trim(), role: editRole })
+      .update({
+        name: editName.trim(),
+        role: editRole,
+        department: editDepartment.trim() || null,
+      })
       .eq('id', user.id);
     if (error) {
       setEditError('更新に失敗しました。もう一度お試しください。');
@@ -185,9 +210,26 @@ export default function HomePage() {
   const startEditProfile = () => {
     setEditName(userProfile.name || '');
     setEditRole(userProfile.role || '');
+    setEditDepartment(userProfile.department || '');
     setEditError('');
     setEditSuccess(false);
     setEditingProfile(true);
+  };
+
+  // アカウント削除
+  const handleDeleteAccount = async () => {
+    if (deleteInput !== '削除する') return;
+    setDeleteLoading(true);
+    try {
+      // 成績・ユーザー情報を削除
+      await supabase.from('results').delete().eq('user_id', user.id);
+      await supabase.from('users').delete().eq('id', user.id);
+      await signOut();
+      alert('アカウントを削除しました。ご利用ありがとうございました。');
+    } catch {
+      alert('削除に失敗しました。管理者にお問い合わせください。');
+    }
+    setDeleteLoading(false);
   };
 
   if (loading) {
@@ -222,12 +264,23 @@ export default function HomePage() {
               {/* 名前 */}
               <div>
                 <label className="text-sm font-bold text-gray-700 mb-1 block">お名前 *</label>
-                <p className="text-xs text-orange-600 mb-2">⚠️ 2次配布防止のため、実名でご登録ください。</p>
                 <input
                   type="text"
                   value={regName}
                   onChange={e => setRegName(e.target.value)}
                   placeholder="例：山田 太郎"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                />
+              </div>
+
+              {/* 所属 */}
+              <div>
+                <label className="text-sm font-bold text-gray-700 mb-1 block">所属（任意）</label>
+                <input
+                  type="text"
+                  value={regDepartment}
+                  onChange={e => setRegDepartment(e.target.value)}
+                  placeholder="例：医仁会武田総合病院"
                   className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
                 />
               </div>
@@ -322,17 +375,20 @@ export default function HomePage() {
           {/* プロフィールカード */}
           {!editingProfile ? (
             <div className="bg-white rounded-2xl shadow-sm p-5">
-              <div className="flex items-start justify-between mb-3">
+              <div className="flex items-start justify-between mb-1">
                 <div>
                   <p className="text-xs text-gray-400">ようこそ</p>
                   <p className="text-xl font-bold text-gray-900 mt-0.5">{userProfile.name} 先生</p>
                   <p className="text-sm text-blue-600">{userProfile.role}</p>
+                  {userProfile.department && (
+                    <p className="text-xs text-gray-500 mt-0.5">{userProfile.department}</p>
+                  )}
                 </div>
                 <button
                   onClick={startEditProfile}
-                  className="text-xs text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 bg-blue-50 px-3 py-1.5 rounded-lg transition font-bold"
+                  className="text-xs text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 bg-blue-50 px-3 py-1.5 rounded-lg transition font-bold flex-shrink-0"
                 >
-                  ✏️ プロフィール編集
+                  ✏️ 編集
                 </button>
               </div>
             </div>
@@ -349,12 +405,11 @@ export default function HomePage() {
               </div>
 
               <form onSubmit={handleUpdateProfile} className="space-y-4">
-                {/* 名前編集 */}
+                {/* 名前 */}
                 <div>
                   <label className="text-xs font-bold text-gray-600 mb-1 block">
                     お名前 <span className="text-red-500">*</span>
                   </label>
-                  <p className="text-xs text-orange-600 mb-1.5">⚠️ 2次配布防止のため、実名でご登録ください。</p>
                   <input
                     type="text"
                     value={editName}
@@ -364,7 +419,19 @@ export default function HomePage() {
                   />
                 </div>
 
-                {/* 身分編集 */}
+                {/* 所属 */}
+                <div>
+                  <label className="text-xs font-bold text-gray-600 mb-1 block">所属</label>
+                  <input
+                    type="text"
+                    value={editDepartment}
+                    onChange={e => setEditDepartment(e.target.value)}
+                    placeholder="例：医仁会武田総合病院"
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  />
+                </div>
+
+                {/* 身分 */}
                 <div>
                   <label className="text-xs font-bold text-gray-600 mb-2 block">
                     身分 <span className="text-red-500">*</span>
@@ -402,6 +469,50 @@ export default function HomePage() {
                   {editLoading ? '更新中...' : '💾 保存する'}
                 </button>
               </form>
+
+              {/* アカウント削除セクション */}
+              <div className="pt-3 border-t border-gray-100">
+                {!showDeleteConfirm ? (
+                  <button
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="w-full text-xs text-red-400 hover:text-red-600 py-2 transition"
+                  >
+                    🗑️ アカウントを削除する
+                  </button>
+                ) : (
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-4 space-y-3">
+                    <p className="text-xs font-bold text-red-700">⚠️ アカウント削除の確認</p>
+                    <p className="text-xs text-red-600">
+                      削除するとプロフィール・成績データが全て失われます。この操作は取り消せません。
+                    </p>
+                    <p className="text-xs text-red-600 font-medium">
+                      確認のため「削除する」と入力してください：
+                    </p>
+                    <input
+                      type="text"
+                      value={deleteInput}
+                      onChange={e => setDeleteInput(e.target.value)}
+                      placeholder="削除する"
+                      className="w-full border border-red-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => { setShowDeleteConfirm(false); setDeleteInput(''); }}
+                        className="flex-1 border border-gray-300 text-gray-600 py-2 rounded-lg text-xs font-bold"
+                      >
+                        キャンセル
+                      </button>
+                      <button
+                        onClick={handleDeleteAccount}
+                        disabled={deleteInput !== '削除する' || deleteLoading}
+                        className="flex-1 bg-red-600 text-white py-2 rounded-lg text-xs font-bold hover:bg-red-700 disabled:opacity-40 transition"
+                      >
+                        {deleteLoading ? '削除中...' : '完全に削除する'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -452,11 +563,11 @@ export default function HomePage() {
             </div>
           )}
 
-          {/* 利用規約リンク */}
-          <div className="text-center">
+          {/* 利用規約・ログアウト */}
+          <div className="space-y-1 text-center">
             <button
               onClick={() => setShowTerms(!showTerms)}
-              className="text-xs text-gray-400 hover:text-gray-600 underline"
+              className="text-xs text-gray-400 hover:text-gray-600 underline block w-full"
             >
               利用規約を確認する
             </button>
@@ -473,11 +584,10 @@ export default function HomePage() {
                 </button>
               </div>
             )}
+            <button onClick={signOut} className="w-full text-gray-400 text-sm py-2 hover:text-gray-600">
+              ログアウト
+            </button>
           </div>
-
-          <button onClick={signOut} className="w-full text-gray-400 text-sm py-2 hover:text-gray-600">
-            ログアウト
-          </button>
         </div>
       </div>
     );
