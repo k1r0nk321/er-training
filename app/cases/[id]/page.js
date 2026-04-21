@@ -452,46 +452,20 @@ ${finalDiagnosis}
       setScoreResult(parsed);
       setPhase('result');
 
-      // お試しモードでなければ成績を保存（再挑戦時は最新スコアで上書き）
+      // お試しモードでなければ成績を保存（毎回insertして全履歴を保持）
       const isTrial = sessionStorage.getItem('trial_mode') === 'true';
       if (!isTrial && user) {
-        // 既存レコードを確認して、あればupdate、なければinsert
-        const { data: existing } = await supabase
-          .from('results')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('case_id', caseId)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single();
-
-        if (existing) {
-          // 再挑戦：最新レコードを更新（最新スコアで合否判定）
-          await supabase.from('results')
-            .update({
-              differentials: snap.differentials.filter(d => d.trim()),
-              workup_plan: snap.examLabels.join('、'),
-              final_diagnosis: finalDiagnosis,
-              score: parsed.score,
-              passed: parsed.passed,
-              feedback: parsed,
-              created_at: new Date().toISOString(),
-            })
-            .eq('id', existing.id);
-        } else {
-          // 初回：新規insert
-          await supabase.from('results').insert({
-            user_id: user.id,
-            case_id: caseId,
-            differentials: snap.differentials.filter(d => d.trim()),
-            workup_plan: snap.examLabels.join('、'),
-            final_diagnosis: finalDiagnosis,
-            score: parsed.score,
-            passed: parsed.passed,
-            feedback: parsed,
-            created_at: new Date().toISOString(),
-          });
-        }
+        await supabase.from('results').insert({
+          user_id: user.id,
+          case_id: caseId,
+          differentials: snap.differentials.filter(d => d.trim()),
+          workup_plan: snap.examLabels.join('、'),
+          final_diagnosis: finalDiagnosis,
+          score: parsed.score,
+          passed: parsed.passed,
+          feedback: parsed,
+          created_at: new Date().toISOString(),
+        });
         fetchPrevResults();
       }
     } catch {
