@@ -634,7 +634,7 @@ ${finalDiagnosis}
 
           <div className="flex gap-3 pb-6">
             <button onClick={resetAll} className="flex-1 border border-blue-600 text-blue-600 py-3 rounded-xl font-bold text-sm hover:bg-blue-50 transition">🔄 再挑戦</button>
-            <button onClick={() => router.push('/cases')} className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-blue-700 transition">📋 症例一覧へ</button>
+            <button onClick={() => { window.location.href = '/cases'; }} className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-blue-700 transition">📋 症例一覧へ</button>
           </div>
         </div>
       </div>
@@ -646,7 +646,7 @@ ${finalDiagnosis}
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-sm sticky top-0 z-10">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
-          <button onClick={() => router.push('/cases')} className="text-blue-600 text-sm">← 一覧へ</button>
+          <button onClick={() => { window.location.href = '/cases'; }} className="text-blue-600 text-sm">← 一覧へ</button>
           <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${getDifficultyColor(caseData.difficulty)}`}>
             {getDifficultyLabel(caseData.difficulty)}
           </span>
