@@ -84,7 +84,6 @@ export default function HomePage() {
       .select('value')
       .eq('key', 'trial_password')
       .single();
-    // パスワードはstateに保持するが画面には表示しない
     if (data) setTrialPw(data.value);
   };
 
@@ -97,7 +96,6 @@ export default function HomePage() {
     if (error) {
       setLoginError('メールアドレスまたはパスワードが違います');
     } else {
-      // ログイン成功時にお試しモードフラグを必ずクリア
       sessionStorage.removeItem('trial_mode');
     }
     setLoginLoading(false);
@@ -107,17 +105,14 @@ export default function HomePage() {
   const handleSignup = async (e) => {
     e?.preventDefault();
     setSignupError('');
-
     if (!signupEmail.trim()) { setSignupError('メールアドレスを入力してください'); return; }
     if (signupPassword.length < 8) { setSignupError('パスワードは8文字以上で設定してください'); return; }
     if (signupPassword !== signupPasswordConfirm) { setSignupError('パスワードが一致しません'); return; }
-
     setSignupLoading(true);
     const { error } = await supabase.auth.signUp({
       email: signupEmail.trim(),
       password: signupPassword,
     });
-
     if (error) {
       if (error.message.includes('already registered')) {
         setSignupError('このメールアドレスはすでに登録されています');
@@ -168,7 +163,6 @@ export default function HomePage() {
       setEditError('更新に失敗しました。もう一度お試しください。');
     } else {
       setEditSuccess(true);
-      // auth-contextのuserProfileを再取得するためページをリロード
       setTimeout(() => window.location.reload(), 800);
     }
     setEditLoading(false);
@@ -181,6 +175,9 @@ export default function HomePage() {
     setEditSuccess(false);
     setEditingProfile(true);
   };
+
+  // ===== ローディング =====
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
         <div className="text-center">
@@ -382,7 +379,9 @@ export default function HomePage() {
               <h3 className="font-bold text-gray-700 text-sm">📢 お知らせ</h3>
               {announcements.map(a => (
                 <div key={a.id} className={`p-3 rounded-xl ${a.important ? 'bg-red-50' : 'bg-gray-50'}`}>
-                  <p className={`text-sm font-bold ${a.important ? 'text-red-600' : 'text-gray-700'}`}>{a.title}</p>
+                  <p className={`text-sm font-bold ${a.important ? 'text-red-600' : 'text-gray-700'}`}>
+                    {a.important ? '🔴 ' : ''}{a.title}
+                  </p>
                   {a.body && <p className="text-xs text-gray-500 mt-0.5">{a.body}</p>}
                 </div>
               ))}
@@ -603,11 +602,18 @@ export default function HomePage() {
         {announcements.length > 0 && (
           <div className="space-y-2">
             {announcements.map(a => (
-              <div key={a.id} className={`rounded-xl p-4 ${a.important ? 'bg-red-50 border border-red-100' : 'bg-white border border-gray-100 shadow-sm'}`}>
+              <div
+                key={a.id}
+                className={`rounded-xl p-4 ${a.important ? 'bg-red-50 border border-red-100' : 'bg-white border border-gray-100 shadow-sm'}`}
+              >
                 <p className={`text-sm font-bold ${a.important ? 'text-red-600' : 'text-gray-700'}`}>
                   {a.important ? '🔴 ' : '📢 '}{a.title}
                 </p>
-                {a.body && <p className={`text-xs mt-1 ${a.important ? 'text-red-700' : 'text-gray-500'}`}>{a.body}</p>}
+                {a.body && (
+                  <p className={`text-xs mt-1 ${a.important ? 'text-red-700' : 'text-gray-500'}`}>
+                    {a.body}
+                  </p>
+                )}
               </div>
             ))}
           </div>
