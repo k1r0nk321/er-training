@@ -17,21 +17,50 @@ const ROLE_OPTIONS = [
   { value: 'その他', label: 'その他' },
 ];
 
+const TERMS_TEXT = `【ER Training 利用規約】
+
+第1条（目的・アプリの性質）
+本アプリ「ER Training」は、医師・医学生・コメディカルスタッフを対象とした教育・学習目的のシミュレーションツールです。AIが生成する症例・フィードバック・採点は、臨床現場での診断・治療の指針を提供するものではありません。
+
+第2条（医療免責事項）
+・本アプリの症例・採点結果を実際の患者への診療に使用してはなりません。
+・AIによる採点・フィードバックは医学的に正確であることを保証するものではありません。
+・実際の臨床判断は、最新のガイドライン・文献・指導医の指示に従ってください。
+・本アプリの利用による臨床上の判断・行動について、運営者は一切の責任を負いません。
+
+第3条（利用者の登録義務）
+・利用にあたっては、実名・所属・資格を正確に登録することへの同意が必要です。虚偽の情報による登録は禁止します。
+・アカウントは利用者本人のみが使用できます。他者への貸与・譲渡を禁止します。
+・アクセス情報（URL・パスワード等）を無断で第三者に配布・開示することを禁じます。
+
+第4条（個人情報の取り扱い）
+・登録された個人情報（氏名・メールアドレス・所属・資格・学習成績）は、本アプリの利用者管理・認証、研修プログラムの教育効果の評価・改善、運営者からのお知らせ配信のみに使用します。
+・収集した個人情報は、上記以外の目的には一切使用しません。
+・個人情報を第三者に提供・販売することはありません。
+・本アプリは広告を表示せず、広告目的での個人情報利用は行いません。
+・学習成績は、指導医・プログラム管理者が教育目的で閲覧する場合があります。
+
+第5条（AIの利用と限界）
+・本アプリはAI（Anthropic社 Claude）を使用して採点・フィードバックを行います。
+・AIの回答には誤りが含まれる可能性があります。
+
+第6条（禁止事項）
+・本アプリを実際の患者診療の判断に利用すること
+・アクセス情報・パスワードを無断で第三者に開示・配布すること
+・アプリの内容を無断で複製・転載すること
+
+運営：医仁会武田総合病院 臨床研修部`;
+
 export default function HomePage() {
   const { user, userProfile, isNewUser, signIn, signOut, registerProfile, loading } = useAuth();
   const router = useRouter();
 
-  // モード切替：'login' | 'signup' | 'trial'
   const [mode, setMode] = useState('login');
-
-  // ログイン
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   const [showLoginPw, setShowLoginPw] = useState(false);
-
-  // 新規アカウント作成
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [signupPasswordConfirm, setSignupPasswordConfirm] = useState('');
@@ -40,28 +69,22 @@ export default function HomePage() {
   const [signupDone, setSignupDone] = useState(false);
   const [showSignupPw, setShowSignupPw] = useState(false);
   const [showSignupPwConfirm, setShowSignupPwConfirm] = useState(false);
-
-  // お試しモード
   const [trialPassword, setTrialPassword] = useState('');
   const [trialError, setTrialError] = useState('');
   const [trialPw, setTrialPw] = useState('');
   const [showTrialPw, setShowTrialPw] = useState(false);
-
-  // プロフィール編集
   const [editingProfile, setEditingProfile] = useState(false);
   const [editName, setEditName] = useState('');
   const [editRole, setEditRole] = useState('');
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState('');
   const [editSuccess, setEditSuccess] = useState(false);
-
-  // 新規ユーザー属性登録
   const [regName, setRegName] = useState('');
   const [regRole, setRegRole] = useState('');
   const [regLoading, setRegLoading] = useState(false);
   const [regError, setRegError] = useState('');
-
-  // お知らせ
+  const [termsAgreed, setTermsAgreed] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
   const [announcements, setAnnouncements] = useState([]);
 
   useEffect(() => {
@@ -87,7 +110,6 @@ export default function HomePage() {
     if (data) setTrialPw(data.value);
   };
 
-  // ===== ログイン =====
   const handleLogin = async (e) => {
     e?.preventDefault();
     setLoginError('');
@@ -101,7 +123,6 @@ export default function HomePage() {
     setLoginLoading(false);
   };
 
-  // ===== 新規アカウント作成 =====
   const handleSignup = async (e) => {
     e?.preventDefault();
     setSignupError('');
@@ -109,23 +130,17 @@ export default function HomePage() {
     if (signupPassword.length < 8) { setSignupError('パスワードは8文字以上で設定してください'); return; }
     if (signupPassword !== signupPasswordConfirm) { setSignupError('パスワードが一致しません'); return; }
     setSignupLoading(true);
-    const { error } = await supabase.auth.signUp({
-      email: signupEmail.trim(),
-      password: signupPassword,
-    });
+    const { error } = await supabase.auth.signUp({ email: signupEmail.trim(), password: signupPassword });
     if (error) {
-      if (error.message.includes('already registered')) {
-        setSignupError('このメールアドレスはすでに登録されています');
-      } else {
-        setSignupError('登録に失敗しました：' + error.message);
-      }
+      setSignupError(error.message.includes('already registered')
+        ? 'このメールアドレスはすでに登録されています'
+        : '登録に失敗しました：' + error.message);
     } else {
       setSignupDone(true);
     }
     setSignupLoading(false);
   };
 
-  // ===== お試しモード =====
   const handleTrial = () => {
     if (trialPassword === trialPw) {
       sessionStorage.setItem('trial_mode', 'true');
@@ -135,11 +150,11 @@ export default function HomePage() {
     }
   };
 
-  // ===== 新規ユーザー属性登録 =====
   const handleRegister = async (e) => {
     e?.preventDefault();
     if (!regName.trim()) { setRegError('お名前を入力してください'); return; }
     if (!regRole) { setRegError('身分を選択してください'); return; }
+    if (!termsAgreed) { setRegError('利用規約に同意してください'); return; }
     setRegLoading(true);
     setRegError('');
     const { error } = await registerProfile(regName.trim(), regRole);
@@ -147,7 +162,6 @@ export default function HomePage() {
     setRegLoading(false);
   };
 
-  // ===== プロフィール更新 =====
   const handleUpdateProfile = async (e) => {
     e?.preventDefault();
     if (!editName.trim()) { setEditError('お名前を入力してください'); return; }
@@ -176,7 +190,6 @@ export default function HomePage() {
     setEditingProfile(true);
   };
 
-  // ===== ローディング =====
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -192,7 +205,7 @@ export default function HomePage() {
   if (user && isNewUser) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col">
-        <div className="max-w-md mx-auto w-full px-4 py-10 space-y-6 flex-1">
+        <div className="max-w-md mx-auto w-full px-4 py-10 space-y-5 flex-1">
           <div className="text-center py-4">
             <div className="text-5xl mb-3">🏥</div>
             <h1 className="text-2xl font-black text-gray-900">ER Training</h1>
@@ -206,6 +219,7 @@ export default function HomePage() {
             </div>
 
             <form onSubmit={handleRegister} className="space-y-4">
+              {/* 名前 */}
               <div>
                 <label className="text-sm font-bold text-gray-700 mb-1 block">お名前 *</label>
                 <p className="text-xs text-orange-600 mb-2">⚠️ 2次配布防止のため、実名でご登録ください。</p>
@@ -218,15 +232,16 @@ export default function HomePage() {
                 />
               </div>
 
+              {/* 身分 */}
               <div>
                 <label className="text-sm font-bold text-gray-700 mb-2 block">身分 *</label>
-                <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-2">
                   {ROLE_OPTIONS.map(opt => (
                     <button
                       key={opt.value}
                       type="button"
                       onClick={() => setRegRole(opt.value)}
-                      className={`w-full text-left px-4 py-3 rounded-xl border text-sm font-medium transition ${
+                      className={`text-left px-3 py-2.5 rounded-xl border text-xs font-medium transition ${
                         regRole === opt.value
                           ? 'bg-blue-600 text-white border-blue-600'
                           : 'bg-white text-gray-700 border-gray-200 hover:border-blue-300 hover:bg-blue-50'
@@ -238,14 +253,48 @@ export default function HomePage() {
                 </div>
               </div>
 
+              {/* 利用規約 */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-bold text-gray-700">利用規約 *</label>
+                  <button
+                    type="button"
+                    onClick={() => setShowTerms(!showTerms)}
+                    className="text-xs text-blue-600 hover:text-blue-800 font-bold underline"
+                  >
+                    {showTerms ? '閉じる ▲' : '規約を確認する ▼'}
+                  </button>
+                </div>
+
+                {showTerms && (
+                  <div className="bg-gray-50 rounded-xl p-4 max-h-48 overflow-y-auto border border-gray-200">
+                    <pre className="text-xs text-gray-600 whitespace-pre-wrap font-sans leading-relaxed">
+                      {TERMS_TEXT}
+                    </pre>
+                  </div>
+                )}
+
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={termsAgreed}
+                    onChange={e => setTermsAgreed(e.target.checked)}
+                    className="w-4 h-4 mt-0.5 rounded accent-blue-600 flex-shrink-0"
+                  />
+                  <span className="text-xs text-gray-700 leading-relaxed">
+                    利用規約を読み、内容に同意します。個人情報（氏名・メールアドレス・所属・成績）が本アプリの管理目的のみに使用されることに同意します。
+                  </span>
+                </label>
+              </div>
+
               {regError && <p className="text-red-500 text-xs">{regError}</p>}
 
               <button
                 type="submit"
-                disabled={regLoading || !regName.trim() || !regRole}
+                disabled={regLoading || !regName.trim() || !regRole || !termsAgreed}
                 className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-blue-700 disabled:opacity-50 transition"
               >
-                {regLoading ? '登録中...' : '登録して始める'}
+                {regLoading ? '登録中...' : '同意して登録する'}
               </button>
             </form>
           </div>
@@ -273,35 +322,39 @@ export default function HomePage() {
           {/* プロフィールカード */}
           {!editingProfile ? (
             <div className="bg-white rounded-2xl shadow-sm p-5">
-              <div className="flex items-start justify-between">
+              <div className="flex items-start justify-between mb-3">
                 <div>
-                  <p className="text-sm text-gray-500">ようこそ</p>
+                  <p className="text-xs text-gray-400">ようこそ</p>
                   <p className="text-xl font-bold text-gray-900 mt-0.5">{userProfile.name} 先生</p>
                   <p className="text-sm text-blue-600">{userProfile.role}</p>
                 </div>
                 <button
                   onClick={startEditProfile}
-                  className="text-xs text-gray-400 hover:text-blue-600 border border-gray-200 hover:border-blue-300 px-3 py-1.5 rounded-lg transition"
+                  className="text-xs text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 bg-blue-50 px-3 py-1.5 rounded-lg transition font-bold"
                 >
-                  ✏️ 編集
+                  ✏️ プロフィール編集
                 </button>
               </div>
             </div>
           ) : (
-            <div className="bg-white rounded-2xl shadow-sm p-5 space-y-4">
+            <div className="bg-white rounded-2xl shadow-sm p-5 space-y-4 border-2 border-blue-200">
               <div className="flex items-center justify-between">
-                <h3 className="font-bold text-gray-800">プロフィール編集</h3>
+                <h3 className="font-bold text-blue-700">✏️ プロフィール編集</h3>
                 <button
-                  onClick={() => setEditingProfile(false)}
-                  className="text-xs text-gray-400 hover:text-gray-600"
+                  onClick={() => { setEditingProfile(false); setEditSuccess(false); setEditError(''); }}
+                  className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1 rounded border border-gray-200"
                 >
                   ✕ キャンセル
                 </button>
               </div>
+
               <form onSubmit={handleUpdateProfile} className="space-y-4">
+                {/* 名前編集 */}
                 <div>
-                  <label className="text-sm font-bold text-gray-700 mb-1 block">お名前 *</label>
-                  <p className="text-xs text-orange-600 mb-2">⚠️ 2次配布防止のため、実名でご登録ください。</p>
+                  <label className="text-xs font-bold text-gray-600 mb-1 block">
+                    お名前 <span className="text-red-500">*</span>
+                  </label>
+                  <p className="text-xs text-orange-600 mb-1.5">⚠️ 2次配布防止のため、実名でご登録ください。</p>
                   <input
                     type="text"
                     value={editName}
@@ -310,15 +363,19 @@ export default function HomePage() {
                     className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
                   />
                 </div>
+
+                {/* 身分編集 */}
                 <div>
-                  <label className="text-sm font-bold text-gray-700 mb-2 block">身分 *</label>
-                  <div className="space-y-2">
+                  <label className="text-xs font-bold text-gray-600 mb-2 block">
+                    身分 <span className="text-red-500">*</span>
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
                     {ROLE_OPTIONS.map(opt => (
                       <button
                         key={opt.value}
                         type="button"
                         onClick={() => setEditRole(opt.value)}
-                        className={`w-full text-left px-4 py-3 rounded-xl border text-sm font-medium transition ${
+                        className={`text-left px-3 py-2.5 rounded-xl border text-xs font-medium transition ${
                           editRole === opt.value
                             ? 'bg-blue-600 text-white border-blue-600'
                             : 'bg-white text-gray-700 border-gray-200 hover:border-blue-300 hover:bg-blue-50'
@@ -329,19 +386,26 @@ export default function HomePage() {
                     ))}
                   </div>
                 </div>
+
                 {editError && <p className="text-red-500 text-xs">{editError}</p>}
-                {editSuccess && <p className="text-green-600 text-xs font-bold">✅ 更新しました！</p>}
+                {editSuccess && (
+                  <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-2">
+                    <p className="text-green-700 text-xs font-bold">✅ プロフィールを更新しました</p>
+                  </div>
+                )}
+
                 <button
                   type="submit"
                   disabled={editLoading || !editName.trim() || !editRole}
                   className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-blue-700 disabled:opacity-50 transition"
                 >
-                  {editLoading ? '更新中...' : '保存する'}
+                  {editLoading ? '更新中...' : '💾 保存する'}
                 </button>
               </form>
             </div>
           )}
 
+          {/* メインメニュー */}
           <div className="grid grid-cols-2 gap-3">
             <button
               onClick={() => router.push('/cases')}
@@ -388,6 +452,29 @@ export default function HomePage() {
             </div>
           )}
 
+          {/* 利用規約リンク */}
+          <div className="text-center">
+            <button
+              onClick={() => setShowTerms(!showTerms)}
+              className="text-xs text-gray-400 hover:text-gray-600 underline"
+            >
+              利用規約を確認する
+            </button>
+            {showTerms && (
+              <div className="mt-2 bg-white rounded-xl shadow-sm p-4 text-left border border-gray-100">
+                <pre className="text-xs text-gray-600 whitespace-pre-wrap font-sans leading-relaxed max-h-64 overflow-y-auto">
+                  {TERMS_TEXT}
+                </pre>
+                <button
+                  onClick={() => setShowTerms(false)}
+                  className="mt-3 w-full text-xs text-gray-400 hover:text-gray-600 border border-gray-200 rounded-lg py-1.5"
+                >
+                  閉じる
+                </button>
+              </div>
+            )}
+          </div>
+
           <button onClick={signOut} className="w-full text-gray-400 text-sm py-2 hover:text-gray-600">
             ログアウト
           </button>
@@ -406,65 +493,49 @@ export default function HomePage() {
           <h1 className="text-3xl font-black text-gray-900">ER Training</h1>
         </div>
 
-        {/* タブ切替：ログイン／新規登録／お試し */}
+        {/* タブ切替 */}
         <div className="bg-white rounded-2xl shadow-sm p-1 flex">
-          <button
-            onClick={() => setMode('login')}
-            className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition ${mode === 'login' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}
-          >
-            ログイン
-          </button>
-          <button
-            onClick={() => setMode('signup')}
-            className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition ${mode === 'signup' ? 'bg-green-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}
-          >
-            新規登録
-          </button>
-          <button
-            onClick={() => setMode('trial')}
-            className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition ${mode === 'trial' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}
-          >
-            お試し
-          </button>
+          {[
+            { key: 'login', label: 'ログイン', active: 'bg-blue-600' },
+            { key: 'signup', label: '新規登録', active: 'bg-green-600' },
+            { key: 'trial', label: 'お試し', active: 'bg-indigo-600' },
+          ].map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setMode(tab.key)}
+              className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition ${
+                mode === tab.key ? `${tab.active} text-white` : 'text-gray-400 hover:text-gray-600'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
 
-        {/* ===== ログイン ===== */}
+        {/* ログイン */}
         {mode === 'login' && (
           <div className="bg-white rounded-2xl shadow-sm p-6 space-y-4">
             <h2 className="font-bold text-gray-700">アカウントでログイン</h2>
             <form onSubmit={handleLogin} className="space-y-3">
               <input
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="メールアドレス"
-                required
+                type="email" value={email} onChange={e => setEmail(e.target.value)}
+                placeholder="メールアドレス" required
                 className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
               />
               <div className="relative">
                 <input
-                  type={showLoginPw ? 'text' : 'password'}
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  placeholder="パスワード"
-                  required
+                  type={showLoginPw ? 'text' : 'password'} value={password}
+                  onChange={e => setPassword(e.target.value)} placeholder="パスワード" required
                   className="w-full border border-gray-200 rounded-xl px-4 py-3 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowLoginPw(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs px-1"
-                  tabIndex={-1}
-                >
+                <button type="button" onClick={() => setShowLoginPw(v => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs px-1" tabIndex={-1}>
                   {showLoginPw ? '隠す' : '表示'}
                 </button>
               </div>
               {loginError && <p className="text-red-500 text-xs">{loginError}</p>}
-              <button
-                type="submit"
-                disabled={loginLoading}
-                className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-blue-700 disabled:opacity-50 transition"
-              >
+              <button type="submit" disabled={loginLoading}
+                className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-blue-700 disabled:opacity-50 transition">
                 {loginLoading ? 'ログイン中...' : 'ログイン'}
               </button>
             </form>
@@ -475,11 +546,10 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* ===== 新規アカウント作成 ===== */}
+        {/* 新規登録 */}
         {mode === 'signup' && (
           <div className="bg-white rounded-2xl shadow-sm p-6 space-y-4">
             <h2 className="font-bold text-gray-700">新規アカウント作成</h2>
-
             {signupDone ? (
               <div className="text-center space-y-4 py-4">
                 <div className="text-5xl">📧</div>
@@ -488,70 +558,41 @@ export default function HomePage() {
                   <span className="font-bold text-blue-600">{signupEmail}</span> に確認メールを送りました。
                   メール内のリンクをクリックしてアカウントを有効化してください。
                 </p>
-                <button
-                  onClick={() => { setSignupDone(false); setMode('login'); }}
-                  className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-blue-700 transition"
-                >
+                <button onClick={() => { setSignupDone(false); setMode('login'); }}
+                  className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-blue-700 transition">
                   ログイン画面へ
                 </button>
               </div>
             ) : (
               <form onSubmit={handleSignup} className="space-y-3">
-                <input
-                  type="email"
-                  value={signupEmail}
-                  onChange={e => setSignupEmail(e.target.value)}
-                  placeholder="メールアドレス"
-                  required
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
-                />
+                <input type="email" value={signupEmail} onChange={e => setSignupEmail(e.target.value)}
+                  placeholder="メールアドレス" required
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-300" />
                 <div className="relative">
-                  <input
-                    type={showSignupPw ? 'text' : 'password'}
-                    value={signupPassword}
-                    onChange={e => setSignupPassword(e.target.value)}
-                    placeholder="パスワード（8文字以上）"
-                    required
-                    className="w-full border border-gray-200 rounded-xl px-4 py-3 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowSignupPw(v => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs px-1"
-                    tabIndex={-1}
-                  >
+                  <input type={showSignupPw ? 'text' : 'password'} value={signupPassword}
+                    onChange={e => setSignupPassword(e.target.value)} placeholder="パスワード（8文字以上）" required
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-green-300" />
+                  <button type="button" onClick={() => setShowSignupPw(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs px-1" tabIndex={-1}>
                     {showSignupPw ? '隠す' : '表示'}
                   </button>
                 </div>
                 <div className="relative">
-                  <input
-                    type={showSignupPwConfirm ? 'text' : 'password'}
-                    value={signupPasswordConfirm}
-                    onChange={e => setSignupPasswordConfirm(e.target.value)}
-                    placeholder="パスワード（確認）"
-                    required
-                    className="w-full border border-gray-200 rounded-xl px-4 py-3 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowSignupPwConfirm(v => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs px-1"
-                    tabIndex={-1}
-                  >
+                  <input type={showSignupPwConfirm ? 'text' : 'password'} value={signupPasswordConfirm}
+                    onChange={e => setSignupPasswordConfirm(e.target.value)} placeholder="パスワード（確認）" required
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-green-300" />
+                  <button type="button" onClick={() => setShowSignupPwConfirm(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs px-1" tabIndex={-1}>
                     {showSignupPwConfirm ? '隠す' : '表示'}
                   </button>
                 </div>
                 {signupError && <p className="text-red-500 text-xs">{signupError}</p>}
-                <button
-                  type="submit"
-                  disabled={signupLoading}
-                  className="w-full bg-green-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-green-700 disabled:opacity-50 transition"
-                >
+                <button type="submit" disabled={signupLoading}
+                  className="w-full bg-green-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-green-700 disabled:opacity-50 transition">
                   {signupLoading ? '登録中...' : 'アカウントを作成する'}
                 </button>
               </form>
             )}
-
             {!signupDone && (
               <p className="text-center text-xs text-gray-400">
                 すでにアカウントをお持ちの方は
@@ -561,7 +602,7 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* ===== お試しモード ===== */}
+        {/* お試しモード */}
         {mode === 'trial' && (
           <div className="bg-white rounded-2xl shadow-sm p-6 space-y-4">
             <h2 className="font-bold text-gray-700">お試しモード</h2>
@@ -571,49 +612,33 @@ export default function HomePage() {
             </p>
             <div className="relative">
               <input
-                type={showTrialPw ? 'text' : 'password'}
-                value={trialPassword}
+                type={showTrialPw ? 'text' : 'password'} value={trialPassword}
                 onChange={e => { setTrialPassword(e.target.value); setTrialError(''); }}
                 placeholder="共通パスワード"
                 className="w-full border border-gray-200 rounded-xl px-4 py-3 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
-                onKeyDown={e => e.key === 'Enter' && handleTrial()}
-              />
-              <button
-                type="button"
-                onClick={() => setShowTrialPw(v => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs px-1"
-                tabIndex={-1}
-              >
+                onKeyDown={e => e.key === 'Enter' && handleTrial()} />
+              <button type="button" onClick={() => setShowTrialPw(v => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs px-1" tabIndex={-1}>
                 {showTrialPw ? '隠す' : '表示'}
               </button>
             </div>
             {trialError && <p className="text-red-500 text-xs">{trialError}</p>}
-            <button
-              onClick={handleTrial}
-              disabled={!trialPassword}
-              className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-indigo-700 disabled:opacity-50 transition"
-            >
+            <button onClick={handleTrial} disabled={!trialPassword}
+              className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-indigo-700 disabled:opacity-50 transition">
               体験する
             </button>
           </div>
         )}
 
-        {/* お知らせ（全件表示） */}
+        {/* お知らせ */}
         {announcements.length > 0 && (
           <div className="space-y-2">
             {announcements.map(a => (
-              <div
-                key={a.id}
-                className={`rounded-xl p-4 ${a.important ? 'bg-red-50 border border-red-100' : 'bg-white border border-gray-100 shadow-sm'}`}
-              >
+              <div key={a.id} className={`rounded-xl p-4 ${a.important ? 'bg-red-50 border border-red-100' : 'bg-white border border-gray-100 shadow-sm'}`}>
                 <p className={`text-sm font-bold ${a.important ? 'text-red-600' : 'text-gray-700'}`}>
                   {a.important ? '🔴 ' : '📢 '}{a.title}
                 </p>
-                {a.body && (
-                  <p className={`text-xs mt-1 ${a.important ? 'text-red-700' : 'text-gray-500'}`}>
-                    {a.body}
-                  </p>
-                )}
+                {a.body && <p className={`text-xs mt-1 ${a.important ? 'text-red-700' : 'text-gray-500'}`}>{a.body}</p>}
               </div>
             ))}
           </div>
