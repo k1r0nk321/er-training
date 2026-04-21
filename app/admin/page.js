@@ -597,7 +597,7 @@ export default function AdminPage() {
                   <div key={c.id} className={`bg-white rounded-xl shadow-sm p-4 transition ${isEditing ? 'border-2 border-blue-400' : ''}`}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-bold text-gray-800 text-sm truncate">{c.title}</h3>
+                        <h3 className="font-bold text-gray-800 text-sm">{c.title}</h3>
                         <p className="text-xs text-gray-500 mt-0.5">正解：{c.answer_diagnosis}</p>
                         <div className="flex gap-2 mt-1 flex-wrap">
                           {c.category && <span className="text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">{c.category}</span>}
