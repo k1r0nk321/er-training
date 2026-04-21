@@ -407,6 +407,12 @@ ${differentials.filter(d => d.trim()).map((d, i) => `${i + 1}. ${d}`).join('\n')
 
     const prompt = `救急・ERの指導医として研修医の症例対応を100点満点で採点してください。
 
+【重要な採点方針】
+- 評価対象は「問診・身体診察・検査選択・鑑別診断・最終診断」の過程のみです
+- 治療方針・治療薬・診断基準（スコアリングシステム等）への言及は採点対象外です
+- 治療や診断基準については、採点後のteaching_pointで「知識として」補足してください
+- 減点は問診・検査選択・鑑別・最終診断の質にのみ基づいてください
+
 【症例】タイトル：${caseData.title}、正解の診断：${caseData.answer_diagnosis || ''}
 採点基準：${caseData.scoring_criteria || '総合的に判断'}
 
@@ -432,12 +438,12 @@ ${finalDiagnosis}
     "differential": 25,
     "final_diagnosis": 25
   },
-  "comment": "全体フィードバック200字以内",
+  "comment": "全体フィードバック200字以内（診断過程のみ評価・治療への言及は不要）",
   "interview_feedback": "問診の質1〜2文",
   "workup_feedback": "検査選択の適切さ1〜2文",
   "good_points": "よかった点1〜2文",
-  "improvement": "改善点1〜2文",
-  "teaching_point": "重要な教訓1文"
+  "improvement": "診断過程における改善点1〜2文",
+  "teaching_point": "この症例で研修医が知っておくべき知識（治療・診断基準を含めてよい）1〜2文"
 }`;
 
     try {
