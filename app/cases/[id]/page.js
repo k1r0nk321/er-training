@@ -695,7 +695,7 @@ ${finalDiagnosis}
                     <p className="text-sm text-gray-800">{caseData.chief_complaint}</p></div>
                 )}
                 {caseData.history && (
-                  <div><h3 className="font-bold text-gray-700 text-sm mb-1">現病歴（救急隊情報）</h3>
+                  <div><h3 className="font-bold text-gray-700 text-sm mb-1">現病歴・既往歴・背景情報</h3>
                     <p className="text-sm text-gray-800 whitespace-pre-wrap">{caseData.history}</p></div>
                 )}
               </div>
@@ -756,7 +756,7 @@ ${finalDiagnosis}
               )}
               {caseData.history && (
                 <div className="mb-3">
-                  <p className="text-xs font-bold text-gray-600 mb-1">現病歴</p>
+                  <p className="text-xs font-bold text-gray-600 mb-1">現病歴・既往歴・背景情報</p>
                   <p className="text-sm text-gray-800 whitespace-pre-wrap">{caseData.history}</p>
                 </div>
               )}
@@ -896,7 +896,7 @@ ${finalDiagnosis}
               )}
               {caseData.history && (
                 <div>
-                  <p className="text-xs font-bold text-gray-600 mb-1">現病歴</p>
+                  <p className="text-xs font-bold text-gray-600 mb-1">現病歴・既往歴・背景情報</p>
                   <p className="text-sm text-gray-800 whitespace-pre-wrap">{caseData.history}</p>
                 </div>
               )}
