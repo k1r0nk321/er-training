@@ -274,17 +274,20 @@ ${examsToRun.map((e, i) => `${i + 1}. ${e}`).join('\n')}
 - 症例と直接関係のない検査は「異常なし」と返す
 - 症例に設定済みの検査所見がある場合はそれを優先する
 - 一般採血（WBC・RBC・Hb・Plt・CRP・肝機能・腎機能・電解質・血糖・凝固検査など）は全て通常通り提示する
-- 特殊検査（自己抗体・腫瘍マーカー・ホルモン・遺伝子検査・特殊染色など）は、研修医の鑑別診断に関連する項目のみ提示し、無関係な項目は結果に含めず「鑑別診断に応じて追加検討」と記載する
+- 研修医の現時点の鑑別診断：${differentials.filter(d => d.trim()).join('、') || '（未入力）'}
+- 特殊検査（自己抗体・腫瘍マーカー・ホルモン・遺伝子検査・特殊染色など）は、研修医の鑑別診断に関連する項目のみ提示し、無関係な項目は結果に含めず「鑑別に応じて追加検討」と記載する
+- 鑑別診断が未入力の場合は特殊検査も通常通り全て提示する
 - 検査結果は数値・所見のみを記載する（解釈・指導コメント・「示唆する」などの解釈的な表現は一切含めない）
 - 例：「Hb 7.2 g/dL、WBC 12,400/μL、PLT 18.4万/μL」のような純粋なデータのみ
 
-以下のJSON形式のみで返答（マークダウン記号不要）：
+以下のJSON形式のみで返答（マークダウン記号・コードブロック不要）：
 {
   "results": {
-    "検査名1": "数値・所見のみ",
-    "検査名2": "数値・所見のみ"
+    "検査名1": "数値・所見のみ（改行なし・1行で）",
+    "検査名2": "数値・所見のみ（改行なし・1行で）"
   }
-}`;
+}
+注意：値の中に改行・ダブルクォート・バックスラッシュを含めないこと。血液ガスは「pH 7.32、PaO2 58mmHg、PaCO2 52mmHg、HCO3 24mEq/L、BE -2」のように1行で記載すること。`;
 
     try {
       const response = await fetch('/api/score', {
@@ -293,8 +296,16 @@ ${examsToRun.map((e, i) => `${i + 1}. ${e}`).join('\n')}
         body: JSON.stringify({ prompt }),
       });
       const data = await response.json();
-      const text = (data.text || data.content || '').replace(/```json|```/g, '').trim();
-      const parsed = JSON.parse(text);
+      const raw = (data.text || data.content || '').replace(/```json|```/g, '').trim();
+      // JSONパースを安全に実行（失敗時はフォールバック）
+      let parsed = { results: {} };
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        // JSONが壊れている場合：テキストをそのまま1件として扱う
+        const firstExam = examsToRun[0] || '検査結果';
+        parsed = { results: { [firstExam]: raw.substring(0, 500) } };
+      }
       setExamResults(parsed.results || {});
       setExamDone(true);
 
