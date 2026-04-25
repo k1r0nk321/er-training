@@ -175,6 +175,8 @@ export default function CaseDetailPage() {
 - 診察の指示（「腹部を触らせてください」など）をされた場合は所見を答える
 - 1〜3文で簡潔に返答
 - 絶対に診断名を自分から言わない
+- 検査結果（採血・心電図・画像・培養など）に関する質問には「検査をしてみないとわかりません」と答える。検査結果は次のStep3で提示されるため、このStep2では回答しない
+- 治療法・薬剤・診断基準に関する質問も「先生にお任せします」と答える
 
 【これまでの問診の流れ】
 ${conversationHistory}
@@ -267,12 +269,20 @@ ${conversationHistory}
 【研修医が選択した検査】
 ${examsToRun.map((e, i) => `${i + 1}. ${e}`).join('\n')}
 
+【研修医の現時点の鑑別診断】
+${validDifferentials.length > 0 ? validDifferentials.join('、') : '（未入力）'}
+
 以下のルール：
 - 症例の診断（${caseData.answer_diagnosis}）に関連する検査は、その疾患に特徴的な所見・数値を生成する
 - 症例と直接関係のない検査は「異常なし」と返す
 - 症例に設定済みの検査所見がある場合はそれを優先する
+- 一般採血（WBC・RBC・Hb・Plt・CRP・肝機能・腎機能・電解質・血糖・凝固検査など）は全て通常通り提示する
+- 特殊検査（自己抗体・腫瘍マーカー・ホルモン・遺伝子検査・特殊染色など）は、研修医の鑑別診断に関連する項目のみ提示し、無関係な項目は結果に含めず「鑑別診断に応じて追加検討」と記載する
+- 異常高値の数値は [H] を数値の前に付ける（例：WBC [H]18000/μL、CRP [H]28.4mg/dL）
+- 異常低値の数値は [L] を数値の前に付ける（例：Hb [L]7.2g/dL、Na [L]126mEq/L）
+- 正常値は [H]/[L] を付けない
 - 検査結果は数値・所見のみを記載する（解釈・指導コメント・「示唆する」などの解釈的な表現は一切含めない）
-- 例：「Hb 7.2 g/dL、WBC 12,400/μL、PLT 18.4万/μL」のような純粋なデータのみ
+- 例：「Hb [L]7.2 g/dL、WBC [H]12,400/μL、PLT 18.4万/μL」のような純粋なデータのみ
 
 以下のJSON形式のみで返答（マークダウン記号不要）：
 {
@@ -455,6 +465,8 @@ ${finalDiagnosis}
       const data = await response.json();
       const text = (data.text || data.content || '').replace(/```json|```/g, '').trim();
       const parsed = JSON.parse(text);
+      // スコアで合否を上書き（AIのpassed判定より数値を優先）
+      parsed.passed = (parsed.score >= 80);
       setScoreResult(parsed);
       setPhase('result');
 
@@ -711,8 +723,8 @@ ${finalDiagnosis}
               </div>
             )}
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-              <p className="text-sm text-blue-800 font-medium">🏥 患者が到着しました。問診・診察を開始してください。</p>
-              <p className="text-xs text-blue-600 mt-1">次のステップで患者/家族にAIが代わりに応答します。</p>
+              <p className="text-sm text-blue-800 font-medium">🏥 来院前情報と第一印象から鑑別診断を考えてください。</p>
+              <p className="text-xs text-blue-600 mt-1">次のステップで患者/家族にAIが代わり応答します。下の鑑別診断欄に現時点での考えを入力できます（任意）。</p>
             </div>
 
             {/* Step1でも鑑別診断入力可（任意） */}
@@ -725,7 +737,7 @@ ${finalDiagnosis}
                     <span className="text-sm font-bold text-gray-400 w-5">{i + 1}</span>
                     <input type="text" value={d} onChange={e => updateDifferential(i, e.target.value)}
                       placeholder={i === 0 ? '最も可能性が高い診断名' : `鑑別診断 ${i + 1}`}
-                      className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                      className="flex-1 border-2 border-blue-200 bg-blue-50 rounded-lg px-3 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white placeholder-blue-300" />
                   </div>
                 ))}
               </div>
@@ -818,9 +830,10 @@ ${finalDiagnosis}
                     value={inputText}
                     onChange={e => setInputText(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
-                    placeholder="例：いつから痛いですか？&#10;腹部を触らせてください"
-                    rows={2}
-                    className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"
+                    placeholder={"問診例：いつから痛いですか？
+診察例：腹部を触らせてください"}
+                    rows={3}
+                    className="flex-1 border-2 border-indigo-200 bg-indigo-50 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:bg-white resize-none placeholder-indigo-300"
                     disabled={chatLoading}
                   />
                   <button onClick={handleSendMessage} disabled={!inputText.trim() || chatLoading}
@@ -852,7 +865,7 @@ ${finalDiagnosis}
                   <span className="text-sm font-bold text-gray-400 w-5">{i + 1}</span>
                   <input type="text" value={d} onChange={e => updateDifferential(i, e.target.value)}
                     placeholder={i === 0 ? '最も可能性が高い診断名' : `鑑別診断 ${i + 1}`}
-                    className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                    className="flex-1 border-2 border-blue-200 bg-blue-50 rounded-lg px-3 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white placeholder-blue-300" />
                 </div>
               ))}
             </div>
@@ -1022,7 +1035,15 @@ ${finalDiagnosis}
                   {Object.entries(examResults).filter(([k]) => k !== '_key_finding').map(([exam, result]) => (
                     <div key={exam} className="px-4 py-3">
                       <p className="text-xs font-bold text-indigo-600 mb-1">{exam}</p>
-                      <p className="text-sm text-gray-900 font-mono whitespace-pre-wrap leading-relaxed">{result}</p>
+                      <p className="text-sm text-gray-900 font-mono whitespace-pre-wrap leading-relaxed">
+                        {result.split(/(\[H\][^\s,、。
+]+|\[L\][^\s,、。
+]+)/).map((part, i) => {
+                          if (part.startsWith('[H]')) return <span key={i} className="text-red-600 font-bold">{part.replace('[H]', '')}</span>;
+                          if (part.startsWith('[L]')) return <span key={i} className="text-blue-600 font-bold">{part.replace('[L]', '')}</span>;
+                          return part;
+                        })}
+                      </p>
                     </div>
                   ))}
                 </div>
