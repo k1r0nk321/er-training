@@ -269,20 +269,14 @@ ${conversationHistory}
 【研修医が選択した検査】
 ${examsToRun.map((e, i) => `${i + 1}. ${e}`).join('\n')}
 
-【研修医の現時点の鑑別診断】
-${validDifferentials.length > 0 ? validDifferentials.join('、') : '（未入力）'}
-
 以下のルール：
 - 症例の診断（${caseData.answer_diagnosis}）に関連する検査は、その疾患に特徴的な所見・数値を生成する
 - 症例と直接関係のない検査は「異常なし」と返す
 - 症例に設定済みの検査所見がある場合はそれを優先する
 - 一般採血（WBC・RBC・Hb・Plt・CRP・肝機能・腎機能・電解質・血糖・凝固検査など）は全て通常通り提示する
 - 特殊検査（自己抗体・腫瘍マーカー・ホルモン・遺伝子検査・特殊染色など）は、研修医の鑑別診断に関連する項目のみ提示し、無関係な項目は結果に含めず「鑑別診断に応じて追加検討」と記載する
-- 異常高値の数値は [H] を数値の前に付ける（例：WBC [H]18000/μL、CRP [H]28.4mg/dL）
-- 異常低値の数値は [L] を数値の前に付ける（例：Hb [L]7.2g/dL、Na [L]126mEq/L）
-- 正常値は [H]/[L] を付けない
 - 検査結果は数値・所見のみを記載する（解釈・指導コメント・「示唆する」などの解釈的な表現は一切含めない）
-- 例：「Hb [L]7.2 g/dL、WBC [H]12,400/μL、PLT 18.4万/μL」のような純粋なデータのみ
+- 例：「Hb 7.2 g/dL、WBC 12,400/μL、PLT 18.4万/μL」のような純粋なデータのみ
 
 以下のJSON形式のみで返答（マークダウン記号不要）：
 {
@@ -465,7 +459,6 @@ ${finalDiagnosis}
       const data = await response.json();
       const text = (data.text || data.content || '').replace(/```json|```/g, '').trim();
       const parsed = JSON.parse(text);
-      // スコアで合否を上書き（AIのpassed判定より数値を優先）
       parsed.passed = (parsed.score >= 80);
       setScoreResult(parsed);
       setPhase('result');
@@ -506,7 +499,6 @@ ${finalDiagnosis}
   }[d] || 'bg-gray-100 text-gray-600');
 
   const getDifficultyLabel = (d) => ({ easy: '易', medium: '中', hard: '難' }[d] || '中');
-
 
   const phaseLabels = ['症例確認', '問診・診察・鑑別', '精査・検査・最終診断'];
   const phaseOrder = ['info', 'interview', 'workup'];
@@ -831,8 +823,7 @@ ${finalDiagnosis}
                     value={inputText}
                     onChange={e => setInputText(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
-                    placeholder={"問診例：いつから痛いですか？
-診察例：腹部を触らせてください"}
+                    placeholder={"問診例：いつから痛いですか？\n診察例：腹部を触らせてください"}
                     rows={3}
                     className="flex-1 border-2 border-indigo-200 bg-indigo-50 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:bg-white resize-none placeholder-indigo-300"
                     disabled={chatLoading}
@@ -1036,9 +1027,7 @@ ${finalDiagnosis}
                   {Object.entries(examResults).filter(([k]) => k !== '_key_finding').map(([exam, result]) => (
                     <div key={exam} className="px-4 py-3">
                       <p className="text-xs font-bold text-indigo-600 mb-1">{exam}</p>
-                      <p className="text-sm text-gray-900 font-mono whitespace-pre-wrap leading-relaxed">
-                        {result}
-                      </p>
+                      <p className="text-sm text-gray-900 font-mono whitespace-pre-wrap leading-relaxed">{result}</p>
                     </div>
                   ))}
                 </div>
