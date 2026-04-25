@@ -168,7 +168,11 @@ export default function CasesPage() {
       alert('不合格の症例はありません！');
       return;
     }
-    const randomCase = failed[Math.floor(Math.random() * failed.length)];
+    // 易しい順に優先：easy→medium→hard の順でランダム選択
+    const diffOrder = { easy: 1, medium: 2, hard: 3 };
+    const minDiff = Math.min(...failed.map(c => diffOrder[c.difficulty] || 2));
+    const easiest = failed.filter(c => (diffOrder[c.difficulty] || 2) === minDiff);
+    const randomCase = easiest[Math.floor(Math.random() * easiest.length)];
     router.push(`/cases/${randomCase.id}`);
   };
 
