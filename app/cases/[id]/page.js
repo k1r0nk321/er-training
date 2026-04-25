@@ -721,7 +721,7 @@ ${finalDiagnosis}
                 <p className="text-xs font-bold text-yellow-700 mb-1">📊 前回の成績</p>
                 {prevResults.slice(0, 2).map(r => (
                   <p key={r.id} className="text-xs text-yellow-800">
-                    {new Date(r.created_at).toLocaleDateString('ja-JP')} — {r.score}点 {r.passed ? '（合格）' : ''}
+                    {new Date(r.created_at).toLocaleDateString('ja-JP')} — {r.score}点 {r.score >= 80 ? '（合格）' : '（不合格）'}
                   </p>
                 ))}
               </div>
