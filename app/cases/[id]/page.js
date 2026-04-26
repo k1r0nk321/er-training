@@ -428,6 +428,13 @@ ${differentials.filter(d => d.trim()).map((d, i) => `${i + 1}. ${d}`).join('\n')
 - 治療や診断基準については、採点後のteaching_pointで「知識として」補足してください
 - 減点は問診・検査選択・鑑別・最終診断の質にのみ基づいてください
 
+【鑑別診断の評価方針（最重要）】
+- 鑑別診断の評価は「Step1の症例情報（バイタル・主訴・現病歴・初期検査）とStep2の問診・診察」の情報のみに基づいて行うこと
+- 検査結果（Step3で選択した採血・心電図・画像など）は鑑別診断の評価に一切使用しないこと
+- 例：心電図でVTが確認されても、その情報は鑑別診断の評価に使ってはならない。Step1・Step2の情報から鑑別診断としてVT・不整脈を挙げていれば適切と評価する
+- 鑑別診断の順位（第何位か）も、Step1・Step2時点の情報から見て妥当かどうかで判断する。検査結果判明後の視点で「なぜ第一位にしなかったか」と批判してはならない
+- 最終診断と鑑別診断の一致度を論評する際も、検査前の時点での思考過程として評価すること
+
 【症例】タイトル：${caseData.title}、正解の診断：${caseData.answer_diagnosis || ''}
 採点基準：${caseData.scoring_criteria || '総合的に判断'}
 
@@ -735,24 +742,8 @@ ${finalDiagnosis}
               </div>
             )}
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-              <p className="text-sm text-blue-800 font-medium">🏥 来院前情報と第一印象から鑑別診断を考えてください。</p>
-              <p className="text-xs text-blue-600 mt-1">次のステップで患者/家族にAIが代わり応答します。下の鑑別診断欄に現時点での考えを入力できます（任意）。</p>
-            </div>
-
-            {/* Step1でも鑑別診断入力可（任意） */}
-            <div className="bg-white rounded-xl shadow-sm p-4">
-              <h3 className="font-bold text-gray-700 text-sm mb-1">第一印象での鑑別診断（任意）</h3>
-              <p className="text-xs text-gray-400 mb-3">バイタル・主訴から現時点で考える鑑別を入力できます。未記入でも進めます。</p>
-              <div className="space-y-2">
-                {differentials.map((d, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-gray-400 w-5">{i + 1}</span>
-                    <input type="text" value={d} onChange={e => updateDifferential(i, e.target.value)}
-                      placeholder={i === 0 ? '最も可能性が高い診断名' : `鑑別診断 ${i + 1}`}
-                      className="flex-1 border-2 border-blue-200 bg-blue-50 rounded-lg px-3 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white placeholder-blue-300" />
-                  </div>
-                ))}
-              </div>
+              <p className="text-sm text-blue-800 font-medium">🏥 来院前情報と第一印象を確認してください。</p>
+              <p className="text-xs text-blue-600 mt-1">次のステップで患者/家族にAIが代わり応答します。問診・診察後にStep2で鑑別診断を入力します。</p>
             </div>
 
             <button onClick={() => setPhase('interview')} className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold text-base hover:bg-blue-700 transition">
