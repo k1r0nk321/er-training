@@ -1,802 +1,1114 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from './lib/auth-context';
-import { supabase } from './lib/supabase';
+import { useState, useEffect, useRef } from 'react';
+import { useRouter, useParams } from 'next/navigation';
+import { useAuth } from '../../lib/auth-context';
+import { supabase } from '../../lib/supabase';
 
-const ADMIN_EMAIL = 'nakamae@mub.biglobe.ne.jp';
+// フェーズ定義
+// 'info' → 'interview'（問診＋鑑別診断） → 'workup' → 'diagnosis' → 'result'
 
-const ROLE_OPTIONS = [
-  { value: '医学生', label: '医学生' },
-  { value: '初期研修医1年', label: '初期研修医（1年目）' },
-  { value: '初期研修医2年', label: '初期研修医（2年目）' },
-  { value: '専攻医・後期研修医', label: '専攻医・後期研修医' },
-  { value: 'コメディカル', label: 'コメディカル' },
-  { value: '指導医', label: '指導医' },
-  { value: 'その他', label: 'その他' },
+// 検査リスト定義
+const EXAM_LIST = [
+  { id: 'blood_gas', label: '血液ガス', category: '血液' },
+  { id: 'blood_test', label: '一般採血', category: '血液' },
+  { id: 'urinalysis', label: '検尿', category: '血液' },
+  { id: 'ecg', label: '心電図', category: '生理' },
+  { id: 'chest_xray', label: '胸部X線', category: '画像' },
+  { id: 'abdominal_xray', label: '腹部X線', category: '画像' },
+  { id: 'echo_cardiac', label: '心エコー', category: '画像' },
+  { id: 'echo_abdominal', label: '腹部エコー', category: '画像' },
+  { id: 'ct_head', label: '頭部単純CT', category: 'CT' },
+  { id: 'ct_chest', label: '胸部単純CT', category: 'CT' },
+  { id: 'ct_chest_contrast', label: '胸部造影CT', category: 'CT' },
+  { id: 'ct_abdomen', label: '腹部単純CT', category: 'CT' },
+  { id: 'ct_abdomen_contrast', label: '腹部造影CT', category: 'CT' },
+  { id: 'mri_head', label: '頭部MRI', category: 'MRI' },
 ];
 
-const TERMS_TEXT = `【ER Training 利用規約】
+const EXAM_CATEGORIES = ['血液', '生理', '画像', 'CT', 'MRI'];
 
-第1条（目的・アプリの性質）
-本アプリ「ER Training」は、医師・医学生・コメディカルスタッフを対象とした教育・学習目的のシミュレーションツールです。AIが生成する症例・フィードバック・採点は、臨床現場での診断・治療の指針を提供するものではありません。
+// ===== アコーディオンコンポーネント =====
+function InfoAccordion({ title, children, defaultOpen = false }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="border border-gray-200 rounded-xl overflow-hidden">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition text-left"
+      >
+        <span className="text-sm font-bold text-gray-600">{title}</span>
+        <span className={`text-gray-400 text-xs transition-transform ${open ? 'rotate-180' : ''}`}>▼</span>
+      </button>
+      {open && (
+        <div className="px-4 py-3 bg-white">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
 
-第2条（医療免責事項）
-・本アプリの症例・採点結果を実際の患者への診療に使用してはなりません。
-・AIによる採点・フィードバックは医学的に正確であることを保証するものではありません。
-・実際の臨床判断は、最新のガイドライン・文献・指導医の指示に従ってください。
-・本アプリの利用による臨床上の判断・行動について、運営者は一切の責任を負いません。
-
-第3条（利用者の登録義務）
-・利用にあたっては、実名・所属・資格を正確に登録することへの同意が必要です。虚偽の情報による登録は禁止します。
-・アカウントは利用者本人のみが使用できます。他者への貸与・譲渡を禁止します。
-・アクセス情報（URL・パスワード等）を無断で第三者に配布・開示することを禁じます。
-
-第4条（個人情報の取り扱い）
-・登録された個人情報（氏名・メールアドレス・所属・資格・学習成績）は、本アプリの利用者管理・認証、研修プログラムの教育効果の評価・改善、運営者からのお知らせ配信のみに使用します。
-・収集した個人情報は、上記以外の目的には一切使用しません。
-・個人情報を第三者に提供・販売することはありません。
-・本アプリは広告を表示せず、広告目的での個人情報利用は行いません。
-・学習成績は、指導医・プログラム管理者が教育目的で閲覧する場合があります。
-
-第5条（AIの利用と限界）
-・本アプリはAI（Anthropic社 Claude）を使用して採点・フィードバックを行います。
-・AIの回答には誤りが含まれる可能性があります。
-
-第6条（禁止事項）
-・本アプリを実際の患者診療の判断に利用すること
-・アクセス情報・パスワードを無断で第三者に開示・配布すること
-・アプリの内容を無断で複製・転載すること
-
-運営：医仁会武田総合病院 臨床研修部`;
-
-export default function HomePage() {
-  const { user, userProfile, isNewUser, signIn, signOut, registerProfile, loading } = useAuth();
+export default function CaseDetailPage() {
+  const { user, loading } = useAuth();
   const router = useRouter();
+  const params = useParams();
+  const caseId = params.id;
 
-  const [mode, setMode] = useState('login');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loginError, setLoginError] = useState('');
-  const [loginLoading, setLoginLoading] = useState(false);
-  const [showLoginPw, setShowLoginPw] = useState(false);
-  const [signupEmail, setSignupEmail] = useState('');
-  const [signupPassword, setSignupPassword] = useState('');
-  const [signupPasswordConfirm, setSignupPasswordConfirm] = useState('');
-  const [signupError, setSignupError] = useState('');
-  const [signupLoading, setSignupLoading] = useState(false);
-  const [signupDone, setSignupDone] = useState(false);
-  const [showSignupPw, setShowSignupPw] = useState(false);
-  const [showSignupPwConfirm, setShowSignupPwConfirm] = useState(false);
-  const [trialPassword, setTrialPassword] = useState('');
-  const [trialError, setTrialError] = useState('');
-  const [trialPw, setTrialPw] = useState('');
-  const [showTrialPw, setShowTrialPw] = useState(false);
+  const [caseData, setCaseData] = useState(null);
+  const [loadingCase, setLoadingCase] = useState(true);
+  const [error, setError] = useState('');
+  const [phase, setPhase] = useState('info');
 
-  // プロフィール編集
-  const [editingProfile, setEditingProfile] = useState(false);
-  const [editName, setEditName] = useState('');
-  const [editRole, setEditRole] = useState('');
-  const [editDepartment, setEditDepartment] = useState('');
-  const [editLoading, setEditLoading] = useState(false);
-  const [editError, setEditError] = useState('');
-  const [editSuccess, setEditSuccess] = useState(false);
+  // ===== 問診チャット =====
+  const [messages, setMessages] = useState([]);
+  const [inputText, setInputText] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const [interviewCoaching, setInterviewCoaching] = useState('');
+  const [showCoaching, setShowCoaching] = useState(false);
+  const [coachingLoading, setCoachingLoading] = useState(false);
+  const chatBottomRef = useRef(null);
 
-  // 新規登録
-  const [regName, setRegName] = useState('');
-  const [regRole, setRegRole] = useState('');
-  const [regDepartment, setRegDepartment] = useState('');
-  const [regLoading, setRegLoading] = useState(false);
-  const [regError, setRegError] = useState('');
-  const [termsAgreed, setTermsAgreed] = useState(false);
-  const [showTerms, setShowTerms] = useState(false);
+  // ===== Step3指導医コメント =====
+  const [workupCoaching, setWorkupCoaching] = useState('');
+  const [workupCoachingLoading, setWorkupCoachingLoading] = useState(false);
+  const [showWorkupCoaching, setShowWorkupCoaching] = useState(false);
 
-  // アカウント削除
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [deleteLoading, setDeleteLoading] = useState(false);
-  const [deleteInput, setDeleteInput] = useState('');
+  // ===== 採点用スナップショット（指導コメント取得前の情報を保存） =====
+  const [scoreSnapshot, setScoreSnapshot] = useState(null); // {differentials, messages, examResults, examLabels}
 
-  const [announcements, setAnnouncements] = useState([]);
+  // ===== 鑑別診断 =====
+  const [differentials, setDifferentials] = useState(['', '', '', '', '']);
+  const [aiAnalysis, setAiAnalysis] = useState('');
+  const [analysisDone, setAnalysisDone] = useState(false);
 
-  const [appUpdates, setAppUpdates] = useState([]);
+  // ===== 精査計画（新） =====
+  const [selectedExams, setSelectedExams] = useState({});
+  const [otherExam, setOtherExam] = useState('');
+  const [examResults, setExamResults] = useState({}); // 検査結果
+  const [examLoading, setExamLoading] = useState(false);
+  const [examDone, setExamDone] = useState(false);
+  const [otherExamResult, setOtherExamResult] = useState('');
+
+  // ===== 最終診断 =====
+  const [finalDiagnosis, setFinalDiagnosis] = useState('');
+
+  // ===== 採点 =====
+  const [scoreResult, setScoreResult] = useState(null);
+  const [scoringLoading, setScoringLoading] = useState(false);
+
+  // ===== 前回成績 =====
+  const [prevResults, setPrevResults] = useState([]);
 
   useEffect(() => {
-    fetchAnnouncements();
-    fetchTrialPw();
-    fetchAppUpdates();
-  }, []);
+    const trial = sessionStorage.getItem('trial_mode') === 'true';
+    // ログイン済みユーザーはお試しモードフラグを強制クリア
+    if (user) sessionStorage.removeItem('trial_mode');
+    if (!loading && !user && !trial) router.push('/');
+  }, [user, loading, router]);
 
-  const fetchAnnouncements = async () => {
-    const { data } = await supabase
-      .from('announcements')
+  useEffect(() => {
+    const trial = sessionStorage.getItem('trial_mode') === 'true';
+    // ログイン済みユーザー
+    if (user && caseId) {
+      fetchCase();
+      fetchPrevResults();
+    }
+    // お試しモード（userがnullでも症例取得）
+    if (!user && trial && caseId) {
+      fetchCase();
+    }
+  }, [user, caseId]);
+
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const fetchCase = async () => {
+    setLoadingCase(true);
+    const { data, error } = await supabase
+      .from('cases')
       .select('*')
-      .order('created_at', { ascending: false })
-      .limit(5);
-    setAnnouncements(data || []);
+      .eq('id', caseId)
+      .single();
+    if (error || !data) setError('症例が見つかりません');
+    else setCaseData(data);
+    setLoadingCase(false);
   };
 
-  const fetchAppUpdates = async () => {
+  const fetchPrevResults = async () => {
+    if (!user) return;
     const { data } = await supabase
-      .from('app_updates')
-      .select('id, title, category, created_at')
+      .from('results')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('case_id', caseId)
       .order('created_at', { ascending: false })
       .limit(3);
-    setAppUpdates(data || []);
+    if (data) setPrevResults(data);
   };
 
-  const fetchTrialPw = async () => {
-    const { data } = await supabase
-      .from('app_settings')
-      .select('value')
-      .eq('key', 'trial_password')
-      .single();
-    if (data) setTrialPw(data.value);
-  };
+  // ===== 問診送信 =====
+  const handleSendMessage = async () => {
+    if (!inputText.trim() || chatLoading) return;
+    const userMsg = inputText.trim();
+    setInputText('');
+    const newMessages = [...messages, { role: 'resident', text: userMsg }];
+    setMessages(newMessages);
+    setChatLoading(true);
 
-  const handleLogin = async (e) => {
-    e?.preventDefault();
-    setLoginError('');
-    setLoginLoading(true);
-    const { error } = await signIn(email, password);
-    if (error) {
-      setLoginError('メールアドレスまたはパスワードが違います');
-    } else {
-      sessionStorage.removeItem('trial_mode');
-    }
-    setLoginLoading(false);
-  };
+    const conversationHistory = newMessages.map(m =>
+      `${m.role === 'resident' ? '研修医' : '患者/家族'}：${m.text}`
+    ).join('\n');
 
-  const handleSignup = async (e) => {
-    e?.preventDefault();
-    setSignupError('');
-    if (!signupEmail.trim()) { setSignupError('メールアドレスを入力してください'); return; }
-    if (signupPassword.length < 8) { setSignupError('パスワードは8文字以上で設定してください'); return; }
-    if (signupPassword !== signupPasswordConfirm) { setSignupError('パスワードが一致しません'); return; }
-    setSignupLoading(true);
-    const { error } = await supabase.auth.signUp({ email: signupEmail.trim(), password: signupPassword });
-    if (error) {
-      setSignupError(error.message.includes('already registered')
-        ? 'このメールアドレスはすでに登録されています'
-        : '登録に失敗しました：' + error.message);
-    } else {
-      setSignupDone(true);
-    }
-    setSignupLoading(false);
-  };
+    const prompt = `あなたは救急ERに搬送された患者（または家族）の役を演じています。
 
-  const handleTrial = () => {
-    if (trialPassword === trialPw) {
-      sessionStorage.setItem('trial_mode', 'true');
-      router.push('/cases');
-    } else {
-      setTrialError('パスワードが違います。管理者にご確認ください。');
-    }
-  };
+【症例情報（演じる際の根拠。研修医には見せない）】
+症例タイトル：${caseData.title}
+主訴：${caseData.chief_complaint || ''}
+現病歴：${caseData.history || ''}
+正解の診断：${caseData.answer_diagnosis || ''}
+身体所見（診察された場合のみ答える）：${caseData.physical_exam || ''}
 
-  const handleRegister = async (e) => {
-    e?.preventDefault();
-    if (!regName.trim()) { setRegError('お名前を入力してください'); return; }
-    if (!regRole) { setRegError('身分を選択してください'); return; }
-    if (!termsAgreed) { setRegError('利用規約に同意してください'); return; }
-    setRegLoading(true);
-    setRegError('');
-    // registerProfileで基本情報を登録後、departmentを更新
-    const { error } = await registerProfile(regName.trim(), regRole);
-    if (error) {
-      setRegError('登録に失敗しました。もう一度お試しください。');
-    } else if (regDepartment.trim()) {
-      // 所属がある場合は追加更新
-      await supabase
-        .from('users')
-        .update({ department: regDepartment.trim() })
-        .eq('id', user.id);
-    }
-    setRegLoading(false);
-  };
+【ルール】
+- 患者または家族として自然に返答（医学用語は使わず一般的な言葉で）
+- 診察の指示（「腹部を触らせてください」など）をされた場合は所見を答える
+- 1〜3文で簡潔に返答
+- 絶対に診断名を自分から言わない
+- 検査結果（採血・心電図・画像・培養など）に関する質問には「検査をしてみないとわかりません」と答える。検査結果は次のStep3で提示されるため、このStep2では回答しない
+- 治療法・薬剤・診断基準に関する質問も「先生にお任せします」と答える
 
-  const handleUpdateProfile = async (e) => {
-    e?.preventDefault();
-    if (!editName.trim()) { setEditError('お名前を入力してください'); return; }
-    if (!editRole) { setEditError('身分を選択してください'); return; }
-    setEditLoading(true);
-    setEditError('');
-    setEditSuccess(false);
-    const { error } = await supabase
-      .from('users')
-      .update({
-        name: editName.trim(),
-        role: editRole,
-        department: editDepartment.trim() || null,
-      })
-      .eq('id', user.id);
-    if (error) {
-      setEditError('更新に失敗しました。もう一度お試しください。');
-    } else {
-      setEditSuccess(true);
-      setTimeout(() => window.location.reload(), 800);
-    }
-    setEditLoading(false);
-  };
+【これまでの問診の流れ】
+${conversationHistory}
 
-  const startEditProfile = () => {
-    setEditName(userProfile.name || '');
-    setEditRole(userProfile.role || '');
-    setEditDepartment(userProfile.department || '');
-    setEditError('');
-    setEditSuccess(false);
-    setEditingProfile(true);
-  };
+研修医の最新の質問/指示に対して患者/家族として返答してください：`;
 
-  // アカウント削除
-  const handleDeleteAccount = async () => {
-    if (deleteInput !== '削除する') return;
-    setDeleteLoading(true);
     try {
-      // 成績・ユーザー情報を削除
-      await supabase.from('results').delete().eq('user_id', user.id);
-      await supabase.from('users').delete().eq('id', user.id);
-      await signOut();
-      alert('アカウントを削除しました。ご利用ありがとうございました。');
+      const response = await fetch('/api/score', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      });
+      const data = await response.json();
+      setMessages(prev => [...prev, { role: 'patient', text: data.text || data.content || '（回答を取得できませんでした）' }]);
     } catch {
-      alert('削除に失敗しました。管理者にお問い合わせください。');
+      setMessages(prev => [...prev, { role: 'patient', text: '（通信エラーが発生しました）' }]);
     }
-    setDeleteLoading(false);
+    setChatLoading(false);
   };
 
-  if (loading) {
+  // ===== 指導コメント =====
+  const handleGetCoaching = async () => {
+    if (messages.length === 0) { alert('まず問診を行ってください'); return; }
+    setCoachingLoading(true);
+    setShowCoaching(true);
+    setInterviewCoaching('');
+
+    const conversationHistory = messages.map(m =>
+      `${m.role === 'resident' ? '研修医' : '患者/家族'}：${m.text}`
+    ).join('\n');
+
+    const prompt = `救急・ER専門の指導医として、研修医の問診を評価してください。
+
+【症例】タイトル：${caseData.title}、正解：${caseData.answer_diagnosis || ''}
+
+【問診記録】
+${conversationHistory}
+
+以下を200字以内でコメント（採点なし）：
+1. 問診で取れている重要な情報
+2. まだ聞けていない重要な点（もしあれば）
+
+※検査・処置・診断についてのアドバイスや次のステップの提案は一切しないこと。`;
+
+    try {
+      const response = await fetch('/api/score', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      });
+      const data = await response.json();
+      setInterviewCoaching(data.text || data.content || '');
+    } catch {
+      setInterviewCoaching('コメントの取得に失敗しました。');
+    }
+    setCoachingLoading(false);
+  };
+
+  // ===== 検査を選択 =====
+  const toggleExam = (examId) => {
+    setSelectedExams(prev => ({ ...prev, [examId]: !prev[examId] }));
+    setExamDone(false);
+  };
+
+  const selectedExamIds = Object.entries(selectedExams).filter(([, v]) => v).map(([k]) => k);
+  const selectedExamLabels = EXAM_LIST.filter(e => selectedExams[e.id]).map(e => e.label);
+
+  // ===== 検査を実施してAI結果生成 =====
+  const handleRunExams = async () => {
+    const examsToRun = [...selectedExamLabels];
+    if (otherExam.trim()) examsToRun.push(`その他：${otherExam}`);
+
+    if (examsToRun.length === 0) { alert('検査を1つ以上選択してください'); return; }
+
+    setExamLoading(true);
+    setExamResults({});
+    setOtherExamResult('');
+
+    // 症例に設定済みの検査結果（initial_labs）を優先、それ以外はAIが生成
+    const prompt = `あなたは救急ERの指導医です。以下の症例に対して、研修医が選択した検査の結果を生成してください。
+
+【症例】
+タイトル：${caseData.title}
+主訴：${caseData.chief_complaint || ''}
+現病歴：${caseData.history || ''}
+バイタル：${caseData.vital_signs || ''}
+正解の診断：${caseData.answer_diagnosis || ''}
+症例に設定済みの検査所見：${caseData.initial_labs || '（なし）'}
+
+【研修医が選択した検査】
+${examsToRun.map((e, i) => `${i + 1}. ${e}`).join('\n')}
+
+以下のルール：
+- 症例の診断（${caseData.answer_diagnosis}）に関連する検査は、その疾患に特徴的な所見・数値を生成する
+- 症例と直接関係のない検査は「異常なし」と返す
+- 症例に設定済みの検査所見がある場合はそれを優先する
+- 一般採血（WBC・RBC・Hb・Plt・CRP・肝機能・腎機能・電解質・血糖・凝固検査など）は全て通常通り提示する
+- 研修医の現時点の鑑別診断：${differentials.filter(d => d.trim()).join('、') || '（未入力）'}
+- 特殊検査（自己抗体・腫瘍マーカー・ホルモン・遺伝子検査・特殊染色など）は、研修医の鑑別診断に関連する項目のみ提示し、無関係な項目は結果に含めず「鑑別に応じて追加検討」と記載する
+- 鑑別診断が未入力の場合は特殊検査も通常通り全て提示する
+- 検査結果は数値・所見のみを記載する（解釈・指導コメント・「示唆する」などの解釈的な表現は一切含めない）
+- 例：「Hb 7.2 g/dL、WBC 12,400/μL、PLT 18.4万/μL」のような純粋なデータのみ
+
+以下のJSON形式のみで返答（マークダウン記号・コードブロック不要）：
+{
+  "results": {
+    "検査名1": "数値・所見のみ（改行なし・1行で）",
+    "検査名2": "数値・所見のみ（改行なし・1行で）"
+  }
+}
+注意：値の中に改行・ダブルクォート・バックスラッシュを含めないこと。血液ガスは「pH 7.32、PaO2 58mmHg、PaCO2 52mmHg、HCO3 24mEq/L、BE -2」のように1行で記載すること。`;
+
+    try {
+      const response = await fetch('/api/score', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      });
+      const data = await response.json();
+      const raw = (data.text || data.content || '').replace(/```json|```/g, '').trim();
+      // JSONパースを安全に実行（失敗時はフォールバック）
+      let parsed = { results: {} };
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        // JSONが壊れている場合：テキストをそのまま1件として扱う
+        const firstExam = examsToRun[0] || '検査結果';
+        parsed = { results: { [firstExam]: raw.substring(0, 500) } };
+      }
+      setExamResults(parsed.results || {});
+      setExamDone(true);
+
+      // ===== 採点用スナップショットを保存（この時点の情報が本人の実力） =====
+      setScoreSnapshot({
+        differentials: [...differentials],
+        messages: [...messages],
+        examLabels: [...selectedExamLabels, otherExam ? otherExam : null].filter(Boolean),
+        examResults: parsed.results || {},
+      });
+
+    } catch (e) {
+      alert('検査結果の取得に失敗しました。もう一度お試しください。');
+    }
+    setExamLoading(false);
+  };
+
+  // ===== Step3 指導医コメント =====
+  const handleWorkupCoaching = async () => {
+    setWorkupCoachingLoading(true);
+    setShowWorkupCoaching(true);
+    setWorkupCoaching('');
+
+    const examSummary = selectedExamLabels.join('、') + (otherExam ? `、${otherExam}` : '');
+    const resultSummary = Object.entries(examResults)
+      .map(([k, v]) => `${k}：${v}`)
+      .join('\n');
+
+    const prompt = `救急・ERの指導医として、研修医の検査選択と結果解釈の段階に対してコメントしてください。
+
+【症例】タイトル：${caseData.title}、正解：${caseData.answer_diagnosis || ''}
+
+【研修医が選択した検査】
+${examSummary || '（なし）'}
+
+【検査結果】
+${resultSummary || '（なし）'}
+
+200字以内でコメント（採点なし）：
+1. 検査選択の妥当性（良い点）
+2. 選択しておくべきだった検査（もしあれば）
+
+※次に何をすべきか・診断名・治療方針についてのアドバイスは一切しないこと。`;
+
+    try {
+      const response = await fetch('/api/score', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      });
+      const data = await response.json();
+      setWorkupCoaching(data.text || data.content || '');
+    } catch {
+      setWorkupCoaching('コメントの取得に失敗しました。');
+    }
+    setWorkupCoachingLoading(false);
+  };
+
+  // ===== 鑑別AIフィードバック =====
+  const handleAnalyzeDifferentials = async () => {
+    if (differentials.filter(d => d.trim()).length === 0) { alert('鑑別診断を1つ以上入力してください'); return; }
+    setAiAnalysis('');
+    setAnalysisDone(false);
+
+    const prompt = `救急・ERの指導医として、研修医の鑑別診断を評価してください。
+
+【症例】主訴：${caseData.chief_complaint || ''}、バイタル：${caseData.vital_signs || ''}
+
+【研修医の鑑別診断】
+${differentials.filter(d => d.trim()).map((d, i) => `${i + 1}. ${d}`).join('\n')}
+
+150字以内で教育的フィードバック（採点なし）：
+- 挙げられた鑑別の妥当性（良い点）
+- 見落としていると思われる重要な鑑別（もしあれば1〜2つ）
+
+※次のステップで何をすべきかのアドバイスや、検査・処置の提案は一切しないこと。`;
+
+
+    try {
+      const response = await fetch('/api/score', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      });
+      const data = await response.json();
+      setAiAnalysis(data.text || data.content || '');
+      setAnalysisDone(true);
+    } catch {
+      setAiAnalysis('フィードバックの取得に失敗しました。');
+      setAnalysisDone(true);
+    }
+  };
+
+  // ===== 最終採点（スナップショットの情報で採点） =====
+  const handleFinalScore = async () => {
+    if (!finalDiagnosis.trim()) { alert('最終診断を入力してください'); return; }
+    setScoringLoading(true);
+
+    // スナップショットがあればそちらを優先（指導コメント前の情報）
+    const snap = scoreSnapshot || {
+      differentials,
+      messages,
+      examLabels: selectedExamLabels,
+      examResults,
+    };
+
+    const interviewRecord = snap.messages.length > 0
+      ? snap.messages.map(m => `${m.role === 'resident' ? '研修医' : '患者/家族'}：${m.text}`).join('\n')
+      : '（問診なし）';
+
+    const examRecord = snap.examLabels.length > 0
+      ? snap.examLabels.map(label => `${label}：${snap.examResults[label] || '（結果あり）'}`).join('\n')
+      : '（精査なし）';
+
+    const prompt = `救急・ERの指導医として研修医の症例対応を100点満点で採点してください。
+
+【重要な採点方針】
+- 評価対象は「問診・身体診察・検査選択・鑑別診断・最終診断」の過程のみです
+- 治療方針・治療薬・診断基準（スコアリングシステム等）への言及は採点対象外です
+- 治療や診断基準については、採点後のteaching_pointで「知識として」補足してください
+- 減点は問診・検査選択・鑑別・最終診断の質にのみ基づいてください
+
+【症例】タイトル：${caseData.title}、正解の診断：${caseData.answer_diagnosis || ''}
+採点基準：${caseData.scoring_criteria || '総合的に判断'}
+
+【研修医の問診記録（Step2）】
+${interviewRecord}
+
+【選択した検査】
+${examRecord}
+
+【鑑別診断】
+${snap.differentials.filter(d => d.trim()).map((d, i) => `${i + 1}. ${d}`).join('\n') || '（未入力）'}
+
+【最終診断】
+${finalDiagnosis}
+
+以下のJSON形式のみで返答（マークダウン記号不要）：
+{
+  "score": 85,
+  "passed": true,
+  "breakdown": {
+    "interview": 25,
+    "workup": 25,
+    "differential": 25,
+    "final_diagnosis": 25
+  },
+  "comment": "全体フィードバック200字以内（診断過程のみ評価・治療への言及は不要）",
+  "interview_feedback": "問診の質1〜2文（バイタル・主訴・現病歴など最初から提示された情報の再確認は減点しない。Step2で追加的に引き出した情報を中心に評価）",
+  "workup_feedback": "検査選択の適切さ1〜2文",
+  "good_points": "よかった点1〜2文",
+  "improvement": "診断過程における改善点1〜2文",
+  "teaching_point": "【Teaching Point】\n本症例で研修医が理解できていなかった点・間違えた点を中心に、以下の3点を詳細に解説してください（各100〜150字）。なお、一般的でない医学略語を使う場合は必ず英語のフルスペルと日本語訳を括弧内に記載してください（例：DVT（Deep Vein Thrombosis：深部静脈血栓症））：\n①診断の核心：この疾患を診断するうえで最も重要な思考プロセスや見落としがちな点\n②検査・問診の要点：適切な問診・検査選択のポイントと、研修医が不足していた観点\n③臨床的知識：治療方針・診断基準・類似疾患との鑑別など、この症例で知っておくべき実践的知識"
+}`;
+
+    try {
+      const response = await fetch('/api/score', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      });
+      const data = await response.json();
+      const text = (data.text || data.content || '').replace(/```json|```/g, '').trim();
+      const parsed = JSON.parse(text);
+      parsed.passed = (parsed.score >= 80);
+      setScoreResult(parsed);
+      setPhase('result');
+
+      // お試しモードでなければ成績を保存（毎回insertして全履歴を保持）
+      const isTrial = sessionStorage.getItem('trial_mode') === 'true';
+      if (!isTrial && user) {
+        await supabase.from('results').insert({
+          user_id: user.id,
+          case_id: caseId,
+          differentials: snap.differentials.filter(d => d.trim()),
+          workup_plan: snap.examLabels.join('、'),
+          final_diagnosis: finalDiagnosis,
+          score: parsed.score,
+          passed: parsed.passed,
+          feedback: parsed,
+          created_at: new Date().toISOString(),
+        });
+        fetchPrevResults();
+      }
+    } catch {
+      alert('採点に失敗しました。もう一度お試しください。');
+    }
+    setScoringLoading(false);
+  };
+
+  const validDifferentials = differentials.filter(d => d.trim());
+  const updateDifferential = (idx, val) => {
+    const newList = [...differentials];
+    newList[idx] = val;
+    setDifferentials(newList);
+  };
+
+  const getDifficultyColor = (d) => ({
+    easy: 'bg-green-100 text-green-700',
+    medium: 'bg-yellow-100 text-yellow-700',
+    hard: 'bg-red-100 text-red-700',
+  }[d] || 'bg-gray-100 text-gray-600');
+
+  const getDifficultyLabel = (d) => ({ easy: '易', medium: '中', hard: '難' }[d] || '中');
+
+  const phaseLabels = ['症例確認', '問診・診察・鑑別', '精査・検査・最終診断'];
+  const phaseOrder = ['info', 'interview', 'workup'];
+  const currentIdx = phaseOrder.indexOf(phase);
+
+  const resetAll = () => {
+    setPhase('info');
+    setMessages([]);
+    setDifferentials(['', '', '', '', '']);
+    setSelectedExams({});
+    setOtherExam('');
+    setExamResults({});
+    setExamDone(false);
+    setFinalDiagnosis('');
+    setAiAnalysis('');
+    setAnalysisDone(false);
+    setScoreResult(null);
+    setInterviewCoaching('');
+    setShowCoaching(false);
+    setWorkupCoaching('');
+    setShowWorkupCoaching(false);
+    setScoreSnapshot(null);
+  };
+
+  if (loading || loadingCase) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-          <p className="text-gray-500">読み込み中...</p>
+          <p className="text-gray-500">症例を読み込んでいます...</p>
         </div>
       </div>
     );
   }
 
-  // ===== 新規ユーザー：属性登録画面 =====
-  if (user && isNewUser) {
+  if (error || !caseData) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col">
-        <div className="max-w-md mx-auto w-full px-4 py-10 space-y-5 flex-1">
-          <div className="text-center py-4">
-            <div className="text-5xl mb-3">🏥</div>
-            <h1 className="text-2xl font-black text-gray-900">ER Training</h1>
-            <p className="text-gray-500 mt-1">プロフィール設定（初回のみ）</p>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <p className="text-4xl mb-3">⚠️</p>
+          <p className="text-gray-600">{error || '症例が見つかりません'}</p>
+          <button onClick={() => router.push('/cases')} className="mt-4 text-blue-600 underline">症例一覧へ</button>
+        </div>
+      </div>
+    );
+  }
+
+  // ===== 結果画面 =====
+  if (phase === 'result' && scoreResult) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <header className="bg-white shadow-sm sticky top-0 z-10">
+          <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
+            <button onClick={() => router.push('/cases')} className="text-blue-600 text-sm">← 症例一覧</button>
+            <h1 className="text-lg font-bold text-gray-800">採点結果</h1>
+            <div></div>
+          </div>
+        </header>
+        <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
+
+          {/* スコアカード */}
+          <div className={`rounded-2xl p-6 text-center shadow-lg ${scoreResult.passed ? 'bg-blue-600' : 'bg-gray-500'} text-white`}>
+            <div className="text-6xl font-black mb-1">{scoreResult.score}</div>
+            <div className="text-xl font-bold mb-2">点</div>
+            <div className={`inline-block px-4 py-1 rounded-full text-sm font-bold ${scoreResult.passed ? 'bg-white text-blue-600' : 'bg-white text-gray-600'}`}>
+              {scoreResult.passed ? '✅ 合格（80点以上）' : '❌ 不合格（再挑戦推奨）'}
+            </div>
+            {sessionStorage.getItem('trial_mode') === 'true' && (
+              <p className="text-xs text-white/70 mt-2">※ お試しモードのため成績は保存されません</p>
+            )}
           </div>
 
-          <div className="bg-white rounded-2xl shadow-sm p-6 space-y-5">
-            <div>
-              <h2 className="font-bold text-gray-800 text-lg">プロフィール登録</h2>
-              <p className="text-sm text-gray-500 mt-1">初回ログイン時のみ必要です。</p>
+          {/* 内訳 */}
+          {scoreResult.breakdown && (
+            <div className="bg-white rounded-xl shadow-sm p-4">
+              <h3 className="font-bold text-gray-700 mb-3">採点内訳</h3>
+              <div className="space-y-2">
+                {[
+                  { label: '問診・診察', key: 'interview', max: 25 },
+                  { label: '鑑別診断', key: 'differential', max: 25 },
+                  { label: '精査・検査', key: 'workup', max: 25 },
+                  { label: '最終診断', key: 'final_diagnosis', max: 25 },
+                ].map(item => (
+                  <div key={item.key} className="flex items-center gap-3">
+                    <span className="text-sm text-gray-600 w-28">{item.label}</span>
+                    <div className="flex-1 bg-gray-100 rounded-full h-3">
+                      <div className="bg-blue-500 h-3 rounded-full transition-all" style={{ width: `${(scoreResult.breakdown[item.key] / item.max) * 100}%` }}></div>
+                    </div>
+                    <span className="text-sm font-bold text-gray-700 w-16 text-right">{scoreResult.breakdown[item.key]} / {item.max}点</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* AIフィードバック */}
+          <div className="bg-white rounded-xl shadow-sm p-4 space-y-3">
+            <h3 className="font-bold text-gray-700">AIフィードバック</h3>
+            {scoreResult.comment && <div className="text-sm text-gray-700 bg-gray-50 rounded-lg p-3">{scoreResult.comment}</div>}
+            {scoreResult.interview_feedback && (
+              <div><span className="text-xs font-bold text-purple-600">🗣️ 問診について</span>
+                <p className="text-sm text-gray-700 mt-1">{scoreResult.interview_feedback}</p></div>
+            )}
+            {scoreResult.workup_feedback && (
+              <div><span className="text-xs font-bold text-indigo-600">🔬 検査選択について</span>
+                <p className="text-sm text-gray-700 mt-1">{scoreResult.workup_feedback}</p></div>
+            )}
+            {scoreResult.good_points && (
+              <div><span className="text-xs font-bold text-green-600">✓ 良かった点</span>
+                <p className="text-sm text-gray-700 mt-1">{scoreResult.good_points}</p></div>
+            )}
+            {scoreResult.improvement && (
+              <div><span className="text-xs font-bold text-orange-500">△ 改善点</span>
+                <p className="text-sm text-gray-700 mt-1">{scoreResult.improvement}</p></div>
+            )}
+            {scoreResult.teaching_point && (
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                <span className="text-xs font-bold text-blue-600">📌 Teaching Point</span>
+                <div className="mt-2 space-y-3">
+                  {scoreResult.teaching_point.includes('①') ? (
+                    scoreResult.teaching_point.split(/(?=①|②|③)/).filter(s => s.trim()).map((section, i) => (
+                      <p key={i} className="text-sm text-blue-800 leading-relaxed">{section.trim()}</p>
+                    ))
+                  ) : (
+                    <p className="text-sm text-blue-800 leading-relaxed font-medium">{scoreResult.teaching_point}</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 選択した検査と結果 */}
+          {Object.keys(examResults).length > 0 && (
+            <div className="bg-white rounded-xl shadow-sm p-4">
+              <h3 className="font-bold text-gray-700 mb-2">実施した検査と結果</h3>
+              <div className="divide-y divide-gray-100">
+                {Object.entries(examResults).map(([exam, result]) => (
+                  <div key={exam} className="py-2">
+                    <p className="text-xs font-bold text-indigo-600">{exam}</p>
+                    <p className="text-xs text-gray-900 font-mono mt-0.5 whitespace-pre-wrap">{result}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="flex gap-3 pb-6">
+            <button onClick={resetAll} className="flex-1 border border-blue-600 text-blue-600 py-3 rounded-xl font-bold text-sm hover:bg-blue-50 transition">🔄 再挑戦</button>
+            <button onClick={() => { window.location.href = '/cases'; }} className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-blue-700 transition">📋 症例一覧へ</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ===== メイン画面 =====
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <header className="bg-white shadow-sm sticky top-0 z-10">
+        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
+          <button onClick={() => { window.location.href = '/cases'; }} className="text-blue-600 text-sm">← 一覧へ</button>
+          <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${getDifficultyColor(caseData.difficulty)}`}>
+            {getDifficultyLabel(caseData.difficulty)}
+          </span>
+        </div>
+      </header>
+
+      {/* プログレスバー */}
+      <div className="bg-white border-b">
+        <div className="max-w-2xl mx-auto px-4 py-2">
+          <div className="flex items-center gap-1">
+            {phaseLabels.map((label, i) => {
+              const isActive = i === currentIdx;
+              const isDone = i < currentIdx;
+              return (
+                <div key={i} className="flex items-center gap-1 flex-1">
+                  <div className={`w-full text-center text-xs py-1 rounded font-medium transition ${isActive ? 'bg-blue-600 text-white' : isDone ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
+                    {isDone ? '✓ ' : ''}{label}
+                  </div>
+                  {i < 2 && <span className="text-gray-300 text-xs">›</span>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-2xl mx-auto px-4 py-5 space-y-4">
+        <div>
+          <h1 className="text-xl font-black text-gray-900">{caseData.title}</h1>
+          {caseData.category && <span className="text-xs text-gray-400">{caseData.category}</span>}
+        </div>
+
+        {/* ===== Step1：症例確認 ===== */}
+        {phase === 'info' && (
+          <>
+            {caseData.vital_signs && (
+              <div className="bg-red-50 border border-red-100 rounded-xl p-4">
+                <h3 className="font-bold text-red-700 text-sm mb-2">🚨 バイタルサイン（救急隊より）</h3>
+                <p className="text-sm text-red-800 whitespace-pre-wrap">{caseData.vital_signs}</p>
+              </div>
+            )}
+            {(caseData.chief_complaint || caseData.history) && (
+              <div className="bg-white rounded-xl shadow-sm p-4 space-y-3">
+                {caseData.chief_complaint && (
+                  <div><h3 className="font-bold text-gray-700 text-sm mb-1">主訴</h3>
+                    <p className="text-sm text-gray-800">{caseData.chief_complaint}</p></div>
+                )}
+                {caseData.history && (
+                  <div><h3 className="font-bold text-gray-700 text-sm mb-1">現病歴・既往歴・背景情報</h3>
+                    <p className="text-sm text-gray-800 whitespace-pre-wrap">{caseData.history}</p></div>
+                )}
+              </div>
+            )}
+            {prevResults.length > 0 && (
+              <div className="bg-yellow-50 border border-yellow-100 rounded-xl p-3">
+                <p className="text-xs font-bold text-yellow-700 mb-1">📊 前回の成績</p>
+                {prevResults.slice(0, 2).map(r => (
+                  <p key={r.id} className="text-xs text-yellow-800">
+                    {new Date(r.created_at).toLocaleDateString('ja-JP')} — {r.score}点 {r.score >= 80 ? '（合格）' : '（不合格）'}
+                  </p>
+                ))}
+              </div>
+            )}
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+              <p className="text-sm text-blue-800 font-medium">🏥 来院前情報と第一印象から鑑別診断を考えてください。</p>
+              <p className="text-xs text-blue-600 mt-1">次のステップで患者/家族にAIが代わり応答します。下の鑑別診断欄に現時点での考えを入力できます（任意）。</p>
             </div>
 
-            <form onSubmit={handleRegister} className="space-y-4">
-              {/* 名前 */}
-              <div>
-                <label className="text-sm font-bold text-gray-700 mb-1 block">お名前 *</label>
-                <input
-                  type="text"
-                  value={regName}
-                  onChange={e => setRegName(e.target.value)}
-                  placeholder="例：山田 太郎"
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-                />
+            {/* Step1でも鑑別診断入力可（任意） */}
+            <div className="bg-white rounded-xl shadow-sm p-4">
+              <h3 className="font-bold text-gray-700 text-sm mb-1">第一印象での鑑別診断（任意）</h3>
+              <p className="text-xs text-gray-400 mb-3">バイタル・主訴から現時点で考える鑑別を入力できます。未記入でも進めます。</p>
+              <div className="space-y-2">
+                {differentials.map((d, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-gray-400 w-5">{i + 1}</span>
+                    <input type="text" value={d} onChange={e => updateDifferential(i, e.target.value)}
+                      placeholder={i === 0 ? '最も可能性が高い診断名' : `鑑別診断 ${i + 1}`}
+                      className="flex-1 border-2 border-blue-200 bg-blue-50 rounded-lg px-3 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white placeholder-blue-300" />
+                  </div>
+                ))}
               </div>
+            </div>
 
-              {/* 所属 */}
-              <div>
-                <label className="text-sm font-bold text-gray-700 mb-1 block">所属（任意）</label>
-                <input
-                  type="text"
-                  value={regDepartment}
-                  onChange={e => setRegDepartment(e.target.value)}
-                  placeholder="例：医仁会武田総合病院"
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-                />
+            <button onClick={() => setPhase('interview')} className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold text-base hover:bg-blue-700 transition">
+              問診・診察を開始する →
+            </button>
+          </>
+        )}
+
+        {/* ===== Step2：問診・診察 ===== */}
+        {phase === 'interview' && (
+          <>
+            {/* Step1情報の折りたたみ確認タブ */}
+            <InfoAccordion title="📋 Step1：症例情報を確認する" defaultOpen={false}>
+              {caseData.vital_signs && (
+                <div className="mb-3">
+                  <p className="text-xs font-bold text-red-600 mb-1">🚨 バイタルサイン</p>
+                  <p className="text-sm text-gray-800 whitespace-pre-wrap">{caseData.vital_signs}</p>
+                </div>
+              )}
+              {caseData.chief_complaint && (
+                <div className="mb-3">
+                  <p className="text-xs font-bold text-gray-600 mb-1">主訴</p>
+                  <p className="text-sm text-gray-800">{caseData.chief_complaint}</p>
+                </div>
+              )}
+              {caseData.history && (
+                <div className="mb-3">
+                  <p className="text-xs font-bold text-gray-600 mb-1">現病歴・既往歴・背景情報</p>
+                  <p className="text-sm text-gray-800 whitespace-pre-wrap">{caseData.history}</p>
+                </div>
+              )}
+              {validDifferentials.length > 0 && (
+                <div>
+                  <p className="text-xs font-bold text-gray-600 mb-1">第一印象での鑑別診断</p>
+                  {validDifferentials.map((d, i) => (
+                    <p key={i} className="text-sm text-gray-800">{i + 1}. {d}</p>
+                  ))}
+                </div>
+              )}
+            </InfoAccordion>
+
+            <div className="bg-purple-50 border border-purple-100 rounded-xl p-4">
+              <h3 className="font-bold text-purple-700 mb-1">Step 2：問診・診察・鑑別診断</h3>
+              <p className="text-xs text-purple-600">患者または家族にAIが役を演じて応答します。診察の指示（「腹部を触らせてください」など）も入力できます。問診後、下の鑑別診断欄に現時点での診断を入力してください。</p>
+            </div>
+            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+              <div className="bg-gray-800 px-4 py-2 flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-red-400"></div>
+                <div className="w-2 h-2 rounded-full bg-yellow-400"></div>
+                <div className="w-2 h-2 rounded-full bg-green-400"></div>
+                <span className="text-xs text-gray-300 ml-2">問診・診察ルーム</span>
               </div>
+              <div className="h-72 overflow-y-auto p-4 space-y-3 bg-gray-50">
+                {messages.length === 0 && (
+                  <div className="text-center text-gray-400 text-sm mt-8">
+                    <p className="text-3xl mb-2">🏥</p>
+                    <p>患者が入室しました。</p>
+                    <p className="text-xs mt-1">問診や診察の指示を入力してください。</p>
+                  </div>
+                )}
+                {messages.map((m, i) => (
+                  <div key={i} className={`flex ${m.role === 'resident' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-xs px-4 py-2.5 rounded-2xl text-sm ${m.role === 'resident' ? 'bg-blue-600 text-white rounded-br-sm' : 'bg-white text-gray-800 shadow-sm rounded-bl-sm border border-gray-100'}`}>
+                      <div className={`text-xs mb-1 ${m.role === 'resident' ? 'text-blue-200' : 'text-gray-400'}`}>
+                        {m.role === 'resident' ? '研修医（あなた）' : '患者/家族'}
+                      </div>
+                      {m.text}
+                    </div>
+                  </div>
+                ))}
+                {chatLoading && (
+                  <div className="flex justify-start">
+                    <div className="bg-white px-4 py-3 rounded-2xl rounded-bl-sm shadow-sm border border-gray-100">
+                      <div className="flex gap-1">
+                        {[0, 150, 300].map(delay => (
+                          <div key={delay} className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: `${delay}ms` }}></div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div ref={chatBottomRef}></div>
+              </div>
+              <div className="p-3 border-t border-gray-100 bg-white">
+                <div className="flex gap-2">
+                  <textarea
+                    value={inputText}
+                    onChange={e => setInputText(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
+                    placeholder={"問診例：いつから痛いですか？\n診察例：腹部を触らせてください"}
+                    rows={3}
+                    className="flex-1 border-2 border-indigo-200 bg-indigo-50 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:bg-white resize-none placeholder-indigo-300"
+                    disabled={chatLoading}
+                  />
+                  <button onClick={handleSendMessage} disabled={!inputText.trim() || chatLoading}
+                    className="bg-blue-600 text-white px-4 rounded-xl font-bold text-sm hover:bg-blue-700 disabled:opacity-40 transition flex-shrink-0">
+                    送信
+                  </button>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">Enter で送信 / Shift+Enter で改行</p>
+              </div>
+            </div>
+            <button onClick={handleGetCoaching} disabled={coachingLoading || messages.length === 0}
+              className="w-full border border-purple-400 text-purple-600 py-3 rounded-xl font-bold text-sm hover:bg-purple-50 disabled:opacity-40 transition">
+              {coachingLoading ? '指導コメント取得中...' : '👨‍⚕️ 指導医からコメントをもらう（任意）'}
+            </button>
+            {showCoaching && interviewCoaching && (
+              <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
+                <h4 className="font-bold text-purple-700 text-sm mb-2">👨‍⚕️ 指導医からのコメント</h4>
+                <p className="text-sm text-purple-800 whitespace-pre-wrap">{interviewCoaching}</p>
+              </div>
+            )}
+            {/* 鑑別診断：Step2内に統合 */}
+            <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
+              <h3 className="font-bold text-blue-700 mb-1">現時点での鑑別診断（任意）</h3>
+              <p className="text-xs text-blue-600">問診・診察を踏まえた現時点での鑑別を入力してください。未記入のまま次へ進むこともできます。</p>
+            </div>
+            <div className="bg-white rounded-xl shadow-sm p-4 space-y-3">
+              {differentials.map((d, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-gray-400 w-5">{i + 1}</span>
+                  <input type="text" value={d} onChange={e => updateDifferential(i, e.target.value)}
+                    placeholder={i === 0 ? '最も可能性が高い診断名' : `鑑別診断 ${i + 1}`}
+                    className="flex-1 border-2 border-blue-200 bg-blue-50 rounded-lg px-3 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white placeholder-blue-300" />
+                </div>
+              ))}
+            </div>
+            {!analysisDone && validDifferentials.length > 0 && (
+              <button onClick={handleAnalyzeDifferentials}
+                className="w-full border border-blue-400 text-blue-600 py-3 rounded-xl font-bold text-sm hover:bg-blue-50 transition">
+                🤖 鑑別診断にAIフィードバックをもらう（任意）
+              </button>
+            )}
+            {aiAnalysis && (
+              <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4">
+                <h4 className="font-bold text-indigo-700 text-sm mb-2">🤖 AIフィードバック</h4>
+                <p className="text-sm text-indigo-800 whitespace-pre-wrap">{aiAnalysis}</p>
+              </div>
+            )}
+            <div className="flex gap-3">
+              <button onClick={() => setPhase('info')} className="flex-1 border border-gray-300 text-gray-600 py-3 rounded-xl font-bold text-sm hover:bg-gray-50 transition">← 戻る</button>
+              <button onClick={() => setPhase('workup')} className="flex-grow bg-blue-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-blue-700 transition">
+                精査・検査へ →
+              </button>
+            </div>
+          </>
+        )}
 
-              {/* 身分 */}
-              <div>
-                <label className="text-sm font-bold text-gray-700 mb-2 block">身分 *</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {ROLE_OPTIONS.map(opt => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setRegRole(opt.value)}
-                      className={`text-left px-3 py-2.5 rounded-xl border text-xs font-medium transition ${
-                        regRole === opt.value
-                          ? 'bg-blue-600 text-white border-blue-600'
-                          : 'bg-white text-gray-700 border-gray-200 hover:border-blue-300 hover:bg-blue-50'
-                      }`}
-                    >
-                      {regRole === opt.value ? '✓ ' : ''}{opt.label}
-                    </button>
+        {/* ===== Step3：精査・検査 ===== */}
+        {phase === 'workup' && (
+          <>
+            {/* Step1・Step2情報の折りたたみ確認タブ */}
+            <InfoAccordion title="📋 Step1：症例情報を確認する" defaultOpen={false}>
+              {caseData.vital_signs && (
+                <div className="mb-3">
+                  <p className="text-xs font-bold text-red-600 mb-1">🚨 バイタルサイン</p>
+                  <p className="text-sm text-gray-800 whitespace-pre-wrap">{caseData.vital_signs}</p>
+                </div>
+              )}
+              {caseData.chief_complaint && (
+                <div className="mb-2">
+                  <p className="text-xs font-bold text-gray-600 mb-1">主訴</p>
+                  <p className="text-sm text-gray-800">{caseData.chief_complaint}</p>
+                </div>
+              )}
+              {caseData.history && (
+                <div>
+                  <p className="text-xs font-bold text-gray-600 mb-1">現病歴・既往歴・背景情報</p>
+                  <p className="text-sm text-gray-800 whitespace-pre-wrap">{caseData.history}</p>
+                </div>
+              )}
+            </InfoAccordion>
+
+            <InfoAccordion title="🗣️ Step2：問診・診察の記録を確認する" defaultOpen={false}>
+              {messages.length > 0 ? (
+                <div className="space-y-2">
+                  {messages.map((m, i) => (
+                    <div key={i} className={`text-xs px-3 py-2 rounded-lg ${m.role === 'resident' ? 'bg-blue-50 text-blue-800' : 'bg-gray-50 text-gray-700'}`}>
+                      <span className="font-bold">{m.role === 'resident' ? '研修医' : '患者/家族'}：</span>{m.text}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400">問診記録はありません</p>
+              )}
+              {validDifferentials.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-gray-100">
+                  <p className="text-xs font-bold text-gray-600 mb-1">鑑別診断</p>
+                  {validDifferentials.map((d, i) => (
+                    <p key={i} className="text-sm text-gray-800">{i + 1}. {d}</p>
+                  ))}
+                </div>
+              )}
+            </InfoAccordion>
+
+            <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4">
+              <h3 className="font-bold text-indigo-700 mb-1">Step 3：精査・検査 → 最終診断</h3>
+              <p className="text-xs text-indigo-600">必要な検査を選択して「検査を実施する」を押すとAIが結果を提示します。結果確認後に最終診断を入力してください。</p>
+            </div>
+
+            {/* 鑑別診断サマリー（入力済みの場合） */}
+            {validDifferentials.length > 0 && (
+              <div className="bg-white rounded-xl shadow-sm p-3">
+                <p className="text-xs font-bold text-gray-400 mb-1">現時点の鑑別診断</p>
+                <div className="flex flex-wrap gap-1">
+                  {validDifferentials.map((d, i) => (
+                    <span key={i} className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{i+1}. {d}</span>
                   ))}
                 </div>
               </div>
+            )}
 
-              {/* 利用規約 */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-bold text-gray-700">利用規約 *</label>
-                  <button
-                    type="button"
-                    onClick={() => setShowTerms(!showTerms)}
-                    className="text-xs text-blue-600 hover:text-blue-800 font-bold underline"
-                  >
-                    {showTerms ? '閉じる ▲' : '規約を確認する ▼'}
-                  </button>
-                </div>
-
-                {showTerms && (
-                  <div className="bg-gray-50 rounded-xl p-4 max-h-48 overflow-y-auto border border-gray-200">
-                    <pre className="text-xs text-gray-600 whitespace-pre-wrap font-sans leading-relaxed">
-                      {TERMS_TEXT}
-                    </pre>
-                  </div>
-                )}
-
-                <label className="flex items-start gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={termsAgreed}
-                    onChange={e => setTermsAgreed(e.target.checked)}
-                    className="w-4 h-4 mt-0.5 rounded accent-blue-600 flex-shrink-0"
-                  />
-                  <span className="text-xs text-gray-700 leading-relaxed">
-                    利用規約を読み、内容に同意します。個人情報（氏名・メールアドレス・所属・成績）が本アプリの管理目的のみに使用されることに同意します。
-                  </span>
-                </label>
-              </div>
-
-              {regError && <p className="text-red-500 text-xs">{regError}</p>}
-
-              <button
-                type="submit"
-                disabled={regLoading || !regName.trim() || !regRole || !termsAgreed}
-                className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-blue-700 disabled:opacity-50 transition"
-              >
-                {regLoading ? '登録中...' : '同意して登録する'}
-              </button>
-            </form>
-          </div>
-
-          <button onClick={signOut} className="w-full text-gray-400 text-sm py-2 hover:text-gray-600">
-            ログアウト
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // ===== ログイン済み：トップ画面 =====
-  if (user && userProfile) {
-    const isAdmin = user.email === ADMIN_EMAIL;
-
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-        <div className="max-w-md mx-auto px-4 py-8 space-y-5">
-          <div className="text-center py-4">
-            <div className="text-4xl mb-2">🏥</div>
-            <h1 className="text-2xl font-black text-gray-900">ER Training</h1>
-          </div>
-
-          {/* プロフィールカード */}
-          {!editingProfile ? (
-            <div className="bg-white rounded-2xl shadow-sm p-5">
-              <div className="flex items-start justify-between mb-1">
-                <div>
-                  <p className="text-xs text-gray-400">ようこそ</p>
-                  <p className="text-xl font-bold text-gray-900 mt-0.5">{userProfile.name} 先生</p>
-                  <p className="text-sm text-blue-600">{userProfile.role}</p>
-                  {userProfile.department && (
-                    <p className="text-xs text-gray-500 mt-0.5">{userProfile.department}</p>
-                  )}
-                </div>
-                <button
-                  onClick={startEditProfile}
-                  className="text-xs text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 bg-blue-50 px-3 py-1.5 rounded-lg transition font-bold flex-shrink-0"
-                >
-                  ✏️ 編集
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="bg-white rounded-2xl shadow-sm p-5 space-y-4 border-2 border-blue-200">
-              <div className="flex items-center justify-between">
-                <h3 className="font-bold text-blue-700">✏️ プロフィール編集</h3>
-                <button
-                  onClick={() => { setEditingProfile(false); setEditSuccess(false); setEditError(''); }}
-                  className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1 rounded border border-gray-200"
-                >
-                  ✕ キャンセル
-                </button>
-              </div>
-
-              <form onSubmit={handleUpdateProfile} className="space-y-4">
-                {/* 名前 */}
-                <div>
-                  <label className="text-xs font-bold text-gray-600 mb-1 block">
-                    お名前 <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={editName}
-                    onChange={e => setEditName(e.target.value)}
-                    placeholder="例：山田 太郎"
-                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-                  />
-                </div>
-
-                {/* 所属 */}
-                <div>
-                  <label className="text-xs font-bold text-gray-600 mb-1 block">所属</label>
-                  <input
-                    type="text"
-                    value={editDepartment}
-                    onChange={e => setEditDepartment(e.target.value)}
-                    placeholder="例：医仁会武田総合病院"
-                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-                  />
-                </div>
-
-                {/* 身分 */}
-                <div>
-                  <label className="text-xs font-bold text-gray-600 mb-2 block">
-                    身分 <span className="text-red-500">*</span>
-                  </label>
+            {/* 検査チェックボックス */}
+            <div className="bg-white rounded-xl shadow-sm p-4">
+              {EXAM_CATEGORIES.map(cat => (
+                <div key={cat} className="mb-4">
+                  <p className="text-xs font-bold text-gray-500 mb-2 pb-1 border-b border-gray-100">{cat}</p>
                   <div className="grid grid-cols-2 gap-2">
-                    {ROLE_OPTIONS.map(opt => (
+                    {EXAM_LIST.filter(e => e.category === cat).map(exam => (
                       <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => setEditRole(opt.value)}
-                        className={`text-left px-3 py-2.5 rounded-xl border text-xs font-medium transition ${
-                          editRole === opt.value
-                            ? 'bg-blue-600 text-white border-blue-600'
-                            : 'bg-white text-gray-700 border-gray-200 hover:border-blue-300 hover:bg-blue-50'
+                        key={exam.id}
+                        onClick={() => toggleExam(exam.id)}
+                        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-medium transition text-left ${
+                          selectedExams[exam.id]
+                            ? 'bg-indigo-600 text-white border-indigo-600'
+                            : 'bg-white text-gray-700 border-gray-200 hover:border-indigo-300 hover:bg-indigo-50'
                         }`}
                       >
-                        {editRole === opt.value ? '✓ ' : ''}{opt.label}
+                        <span className="flex-shrink-0 w-5 h-5 rounded border flex items-center justify-center text-xs">
+                          {selectedExams[exam.id] ? '✓' : ''}
+                        </span>
+                        {exam.label}
                       </button>
                     ))}
                   </div>
                 </div>
-
-                {editError && <p className="text-red-500 text-xs">{editError}</p>}
-                {editSuccess && (
-                  <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-2">
-                    <p className="text-green-700 text-xs font-bold">✅ プロフィールを更新しました</p>
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={editLoading || !editName.trim() || !editRole}
-                  className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-blue-700 disabled:opacity-50 transition"
-                >
-                  {editLoading ? '更新中...' : '💾 保存する'}
-                </button>
-              </form>
-
-              {/* アカウント削除セクション */}
-              <div className="pt-3 border-t border-gray-100">
-                {!showDeleteConfirm ? (
-                  <button
-                    onClick={() => setShowDeleteConfirm(true)}
-                    className="w-full text-xs text-red-400 hover:text-red-600 py-2 transition"
-                  >
-                    🗑️ アカウントを削除する
-                  </button>
-                ) : (
-                  <div className="bg-red-50 border border-red-200 rounded-xl p-4 space-y-3">
-                    <p className="text-xs font-bold text-red-700">⚠️ アカウント削除の確認</p>
-                    <p className="text-xs text-red-600">
-                      削除するとプロフィール・成績データが全て失われます。この操作は取り消せません。
-                    </p>
-                    <p className="text-xs text-red-600 font-medium">
-                      確認のため「削除する」と入力してください：
-                    </p>
-                    <input
-                      type="text"
-                      value={deleteInput}
-                      onChange={e => setDeleteInput(e.target.value)}
-                      placeholder="削除する"
-                      className="w-full border border-red-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"
-                    />
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => { setShowDeleteConfirm(false); setDeleteInput(''); }}
-                        className="flex-1 border border-gray-300 text-gray-600 py-2 rounded-lg text-xs font-bold"
-                      >
-                        キャンセル
-                      </button>
-                      <button
-                        onClick={handleDeleteAccount}
-                        disabled={deleteInput !== '削除する' || deleteLoading}
-                        className="flex-1 bg-red-600 text-white py-2 rounded-lg text-xs font-bold hover:bg-red-700 disabled:opacity-40 transition"
-                      >
-                        {deleteLoading ? '削除中...' : '完全に削除する'}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* メインメニュー */}
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              onClick={() => router.push('/cases')}
-              className="bg-blue-600 text-white rounded-2xl p-5 text-left hover:bg-blue-700 active:bg-blue-800 transition shadow-sm"
-            >
-              <div className="text-3xl mb-2">📋</div>
-              <div className="font-bold text-base">症例に挑戦</div>
-              <div className="text-xs text-blue-200 mt-0.5">鑑別診断・採点</div>
-            </button>
-            <button
-              onClick={() => router.push('/results')}
-              className="bg-indigo-600 text-white rounded-2xl p-5 text-left hover:bg-indigo-700 active:bg-indigo-800 transition shadow-sm"
-            >
-              <div className="text-3xl mb-2">📊</div>
-              <div className="font-bold text-base">成績一覧</div>
-              <div className="text-xs text-indigo-200 mt-0.5">過去の記録</div>
-            </button>
-          </div>
-
-          {/* アップデート情報 */}
-          <button
-            onClick={() => router.push('/updates')}
-            className="w-full bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl p-4 text-left hover:bg-emerald-100 transition flex items-center gap-3"
-          >
-            <span className="text-2xl flex-shrink-0">🆕</span>
-            <div className="flex-1 min-w-0">
-              <div className="font-bold text-sm">アップデート情報</div>
-              <div className="text-xs text-emerald-600 mt-0.5">最新の機能改善・追加情報（過去5日分）</div>
-            </div>
-            <span className="text-emerald-400 text-sm flex-shrink-0">→</span>
-          </button>
-
-          {isAdmin && (
-            <button
-              onClick={() => router.push('/admin')}
-              className="w-full bg-gray-700 text-white rounded-2xl p-4 text-left hover:bg-gray-800 transition shadow-sm flex items-center gap-3"
-            >
-              <span className="text-2xl">🔧</span>
-              <div>
-                <div className="font-bold">管理者ダッシュボード</div>
-                <div className="text-xs text-gray-300">統計・症例管理・お知らせ</div>
-              </div>
-            </button>
-          )}
-
-          {announcements.length > 0 && (
-            <div className="bg-white rounded-2xl shadow-sm p-4 space-y-2">
-              <h3 className="font-bold text-gray-700 text-sm">📢 お知らせ</h3>
-              {announcements.map(a => (
-                <div key={a.id} className={`p-3 rounded-xl ${a.important ? 'bg-red-50' : 'bg-gray-50'}`}>
-                  <p className={`text-sm font-bold ${a.important ? 'text-red-600' : 'text-gray-700'}`}>
-                    {a.important ? '🔴 ' : ''}{a.title}
-                  </p>
-                  {a.body && <p className="text-xs text-gray-500 mt-0.5">{a.body}</p>}
-                </div>
               ))}
-            </div>
-          )}
 
-          {/* 利用規約・ログアウト */}
-          <div className="space-y-1 text-center">
-            <button
-              onClick={() => setShowTerms(!showTerms)}
-              className="text-xs text-gray-400 hover:text-gray-600 underline block w-full"
-            >
-              利用規約を確認する
-            </button>
-            {showTerms && (
-              <div className="mt-2 bg-white rounded-xl shadow-sm p-4 text-left border border-gray-100">
-                <pre className="text-xs text-gray-600 whitespace-pre-wrap font-sans leading-relaxed max-h-64 overflow-y-auto">
-                  {TERMS_TEXT}
-                </pre>
-                <button
-                  onClick={() => setShowTerms(false)}
-                  className="mt-3 w-full text-xs text-gray-400 hover:text-gray-600 border border-gray-200 rounded-lg py-1.5"
-                >
-                  閉じる
-                </button>
-              </div>
-            )}
-            <button onClick={signOut} className="w-full text-gray-400 text-sm py-2 hover:text-gray-600">
-              ログアウト
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ===== 未ログイン画面 =====
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col">
-      <div className="max-w-md mx-auto w-full px-4 py-10 space-y-6 flex-1">
-
-        <div className="text-center py-4">
-          <div className="text-5xl mb-3">🏥</div>
-          <h1 className="text-3xl font-black text-gray-900">ER Training</h1>
-        </div>
-
-        {/* タブ切替 */}
-        <div className="bg-white rounded-2xl shadow-sm p-1 flex">
-          {[
-            { key: 'login', label: 'ログイン', active: 'bg-blue-600' },
-            { key: 'signup', label: '新規登録', active: 'bg-green-600' },
-            { key: 'trial', label: 'お試し', active: 'bg-indigo-600' },
-          ].map(tab => (
-            <button
-              key={tab.key}
-              onClick={() => setMode(tab.key)}
-              className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition ${
-                mode === tab.key ? `${tab.active} text-white` : 'text-gray-400 hover:text-gray-600'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {/* ログイン */}
-        {mode === 'login' && (
-          <div className="bg-white rounded-2xl shadow-sm p-6 space-y-4">
-            <h2 className="font-bold text-gray-700">アカウントでログイン</h2>
-            <form onSubmit={handleLogin} className="space-y-3">
-              <input
-                type="email" value={email} onChange={e => setEmail(e.target.value)}
-                placeholder="メールアドレス" required
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-              />
-              <div className="relative">
+              {/* その他 */}
+              <div className="mt-2">
+                <p className="text-xs font-bold text-gray-500 mb-2 pb-1 border-b border-gray-100">その他</p>
                 <input
-                  type={showLoginPw ? 'text' : 'password'} value={password}
-                  onChange={e => setPassword(e.target.value)} placeholder="パスワード" required
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  type="text"
+                  value={otherExam}
+                  onChange={e => { setOtherExam(e.target.value); setExamDone(false); }}
+                  placeholder="その他の検査・コンサルト・処置を入力"
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
                 />
-                <button type="button" onClick={() => setShowLoginPw(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs px-1" tabIndex={-1}>
-                  {showLoginPw ? '隠す' : '表示'}
-                </button>
               </div>
-              {loginError && <p className="text-red-500 text-xs">{loginError}</p>}
-              <button type="submit" disabled={loginLoading}
-                className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-blue-700 disabled:opacity-50 transition">
-                {loginLoading ? 'ログイン中...' : 'ログイン'}
-              </button>
-            </form>
-            <p className="text-center text-xs text-gray-400">
-              アカウントをお持ちでない方は
-              <button onClick={() => setMode('signup')} className="text-green-600 font-bold ml-1">新規登録</button>
-            </p>
-          </div>
-        )}
-
-        {/* 新規登録 */}
-        {mode === 'signup' && (
-          <div className="bg-white rounded-2xl shadow-sm p-6 space-y-4">
-            <h2 className="font-bold text-gray-700">新規アカウント作成</h2>
-            {signupDone ? (
-              <div className="text-center space-y-4 py-4">
-                <div className="text-5xl">📧</div>
-                <p className="font-bold text-gray-800">確認メールを送信しました</p>
-                <p className="text-sm text-gray-500">
-                  <span className="font-bold text-blue-600">{signupEmail}</span> に確認メールを送りました。
-                  メール内のリンクをクリックしてアカウントを有効化してください。
-                </p>
-                <button onClick={() => { setSignupDone(false); setMode('login'); }}
-                  className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-blue-700 transition">
-                  ログイン画面へ
-                </button>
-              </div>
-            ) : (
-              <form onSubmit={handleSignup} className="space-y-3">
-                <input type="email" value={signupEmail} onChange={e => setSignupEmail(e.target.value)}
-                  placeholder="メールアドレス" required
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-300" />
-                <div className="relative">
-                  <input type={showSignupPw ? 'text' : 'password'} value={signupPassword}
-                    onChange={e => setSignupPassword(e.target.value)} placeholder="パスワード（8文字以上）" required
-                    className="w-full border border-gray-200 rounded-xl px-4 py-3 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-green-300" />
-                  <button type="button" onClick={() => setShowSignupPw(v => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs px-1" tabIndex={-1}>
-                    {showSignupPw ? '隠す' : '表示'}
-                  </button>
-                </div>
-                <div className="relative">
-                  <input type={showSignupPwConfirm ? 'text' : 'password'} value={signupPasswordConfirm}
-                    onChange={e => setSignupPasswordConfirm(e.target.value)} placeholder="パスワード（確認）" required
-                    className="w-full border border-gray-200 rounded-xl px-4 py-3 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-green-300" />
-                  <button type="button" onClick={() => setShowSignupPwConfirm(v => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs px-1" tabIndex={-1}>
-                    {showSignupPwConfirm ? '隠す' : '表示'}
-                  </button>
-                </div>
-                {signupError && <p className="text-red-500 text-xs">{signupError}</p>}
-                <button type="submit" disabled={signupLoading}
-                  className="w-full bg-green-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-green-700 disabled:opacity-50 transition">
-                  {signupLoading ? '登録中...' : 'アカウントを作成する'}
-                </button>
-              </form>
-            )}
-            {!signupDone && (
-              <p className="text-center text-xs text-gray-400">
-                すでにアカウントをお持ちの方は
-                <button onClick={() => setMode('login')} className="text-blue-600 font-bold ml-1">ログイン</button>
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* お試しモード */}
-        {mode === 'trial' && (
-          <div className="bg-white rounded-2xl shadow-sm p-6 space-y-4">
-            <h2 className="font-bold text-gray-700">お試しモード</h2>
-            <p className="text-xs text-gray-500">
-              共通パスワードで症例を体験できます。成績は保存されません。<br />
-              パスワードは管理者にお問い合わせください。
-            </p>
-            <div className="relative">
-              <input
-                type={showTrialPw ? 'text' : 'password'} value={trialPassword}
-                onChange={e => { setTrialPassword(e.target.value); setTrialError(''); }}
-                placeholder="共通パスワード"
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
-                onKeyDown={e => e.key === 'Enter' && handleTrial()} />
-              <button type="button" onClick={() => setShowTrialPw(v => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs px-1" tabIndex={-1}>
-                {showTrialPw ? '隠す' : '表示'}
-              </button>
             </div>
-            {trialError && <p className="text-red-500 text-xs">{trialError}</p>}
-            <button onClick={handleTrial} disabled={!trialPassword}
-              className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-indigo-700 disabled:opacity-50 transition">
-              体験する
-            </button>
-          </div>
-        )}
 
-        {/* お知らせ */}
-        {announcements.length > 0 && (
-          <div className="space-y-2">
-            {announcements.map(a => (
-              <div key={a.id} className={`rounded-xl p-4 ${a.important ? 'bg-red-50 border border-red-100' : 'bg-white border border-gray-100 shadow-sm'}`}>
-                <p className={`text-sm font-bold ${a.important ? 'text-red-600' : 'text-gray-700'}`}>
-                  {a.important ? '🔴 ' : '📢 '}{a.title}
-                </p>
-                {a.body && <p className={`text-xs mt-1 ${a.important ? 'text-red-700' : 'text-gray-500'}`}>{a.body}</p>}
+            {/* 選択中の検査 */}
+            {(selectedExamIds.length > 0 || otherExam) && (
+              <div className="bg-indigo-50 rounded-xl p-3">
+                <p className="text-xs font-bold text-indigo-600 mb-1">選択中の検査（{selectedExamIds.length + (otherExam ? 1 : 0)}件）</p>
+                <div className="flex flex-wrap gap-1">
+                  {selectedExamLabels.map(label => (
+                    <span key={label} className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">{label}</span>
+                  ))}
+                  {otherExam && <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{otherExam}</span>}
+                </div>
               </div>
-            ))}
-          </div>
+            )}
+
+            {/* 検査実施ボタン＋結果（ボタンのすぐ下に表示） */}
+            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+              <button
+                onClick={handleRunExams}
+                disabled={examLoading || (selectedExamIds.length === 0 && !otherExam.trim())}
+                className="w-full bg-indigo-600 text-white py-4 font-bold text-base hover:bg-indigo-700 disabled:opacity-40 transition flex items-center justify-center gap-2"
+              >
+                {examLoading ? (
+                  <><div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>検査実施中...</>
+                ) : '🔬 検査を実施する'}
+              </button>
+
+              {/* 検査結果：ボタンのすぐ下に即時表示 */}
+              {examLoading && (
+                <div className="p-4 space-y-2">
+                  {[...selectedExamLabels, otherExam].filter(Boolean).map(label => (
+                    <div key={label} className="flex items-center gap-3 py-2 border-b border-gray-100">
+                      <div className="w-3 h-3 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin flex-shrink-0"></div>
+                      <span className="text-sm text-gray-500">{label}　検査中...</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {examDone && Object.keys(examResults).length > 0 && (
+                <div className="divide-y divide-gray-100">
+                  {Object.entries(examResults).filter(([k]) => k !== '_key_finding').map(([exam, result]) => (
+                    <div key={exam} className="px-4 py-3">
+                      <p className="text-xs font-bold text-indigo-600 mb-1">{exam}</p>
+                      <p className="text-sm text-gray-900 font-mono whitespace-pre-wrap leading-relaxed">{result}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 最終診断：検査結果の下に統合 */}
+            {examDone && (
+              <>
+                {/* Step3 指導医コメント（任意） */}
+                <button
+                  onClick={handleWorkupCoaching}
+                  disabled={workupCoachingLoading}
+                  className="w-full border border-purple-400 text-purple-600 py-3 rounded-xl font-bold text-sm hover:bg-purple-50 disabled:opacity-40 transition"
+                >
+                  {workupCoachingLoading ? '指導コメント取得中...' : '👨‍⚕️ 指導医からコメントをもらう（任意）'}
+                </button>
+                {showWorkupCoaching && workupCoaching && (
+                  <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
+                    <h4 className="font-bold text-purple-700 text-sm mb-2">👨‍⚕️ 指導医からのコメント</h4>
+                    <p className="text-sm text-purple-800 whitespace-pre-wrap">{workupCoaching}</p>
+                  </div>
+                )}
+
+                <div className="bg-green-50 border border-green-100 rounded-xl p-4">
+                  <h3 className="font-bold text-green-700 mb-1">最終診断</h3>
+                  <p className="text-xs text-green-600">検査結果を踏まえた最終的な診断名を入力してください</p>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm p-4">
+                  <input
+                    type="text"
+                    value={finalDiagnosis}
+                    onChange={e => setFinalDiagnosis(e.target.value)}
+                    placeholder="診断名を入力してください"
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-base font-bold focus:outline-none focus:ring-2 focus:ring-green-300"
+                  />
+                </div>
+              </>
+            )}
+
+            <div className="flex gap-3">
+              <button onClick={() => setPhase('interview')} className="flex-1 border border-gray-300 text-gray-600 py-3 rounded-xl font-bold text-sm hover:bg-gray-50 transition">← 戻る</button>
+              {examDone ? (
+                <button
+                  onClick={handleFinalScore}
+                  disabled={!finalDiagnosis.trim() || scoringLoading}
+                  className="flex-grow bg-green-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-green-700 disabled:opacity-40 transition flex items-center justify-center gap-2"
+                >
+                  {scoringLoading ? (
+                    <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>採点中...</>
+                  ) : '🎯 採点する'}
+                </button>
+              ) : (
+                <div className="flex-grow bg-gray-100 text-gray-400 py-3 rounded-xl font-bold text-sm text-center">
+                  検査を実施すると最終診断が入力できます
+                </div>
+              )}
+            </div>
+          </>
         )}
 
-        {/* アップデート情報（最新3件） */}
-        {appUpdates.length > 0 && (
-          <div className="bg-white border border-gray-100 shadow-sm rounded-xl p-4 space-y-2">
-            <p className="text-xs font-bold text-gray-500">🆕 最新のアップデート</p>
-            {appUpdates.map(u => (
-              <div key={u.id} className="flex items-start gap-2">
-                <span className={`text-xs px-1.5 py-0.5 rounded font-bold flex-shrink-0 ${
-                  u.category === '機能追加' ? 'bg-blue-100 text-blue-600' :
-                  u.category === '改善' ? 'bg-green-100 text-green-600' :
-                  u.category === '修正' ? 'bg-orange-100 text-orange-600' :
-                  'bg-purple-100 text-purple-600'
-                }`}>{u.category}</span>
-                <p className="text-xs text-gray-600">{u.title}</p>
-              </div>
-            ))}
-          </div>
-        )}
-
+        <div className="h-4"></div>
       </div>
     </div>
   );
