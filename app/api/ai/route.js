@@ -24,7 +24,7 @@ export async function POST(req) {
     ];
 
     const response = await client.messages.create({
-      model: imageUrl ? "claude-opus-4-5" : "claude-haiku-4-5-20251001",
+      model: "claude-sonnet-4-5-20251001",
       max_tokens: 2048,
       system,
       messages
