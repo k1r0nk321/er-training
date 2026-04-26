@@ -166,6 +166,12 @@ export default function ResultsPage() {
           >
             📊 領域別成績
           </button>
+          <button
+            onClick={() => setActiveTab('teaching')}
+            className={`flex-1 py-2 rounded-lg text-xs font-bold transition ${activeTab === 'teaching' ? 'bg-blue-700 text-white' : 'text-gray-400 hover:text-gray-600'}`}
+          >
+            📌 Teaching
+          </button>
         </div>
 
         {/* ===== 症例別一覧 ===== */}
@@ -360,6 +366,89 @@ export default function ResultsPage() {
                     </div>
                   );
                 })}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ===== Teaching Point一覧 ===== */}
+        {activeTab === 'teaching' && (
+          <div className="space-y-3">
+            {latestResults.length === 0 ? (
+              <div className="text-center py-12 text-gray-400">
+                <p className="text-4xl mb-3">📌</p>
+                <p className="text-sm">まだ挑戦した症例がありません</p>
+              </div>
+            ) : (
+              <>
+                <p className="text-xs text-gray-400 px-1">
+                  挑戦した症例のTeaching Pointを確認できます。タップすると詳細が展開されます。
+                </p>
+                {latestResults
+                  .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+                  .filter(r => r.feedback?.teaching_point)
+                  .map(r => {
+                    const c = cases[r.case_id];
+                    const tp = r.feedback?.teaching_point || '';
+                    const isExpanded = expandedCategory === ('tp_' + r.case_id);
+                    return (
+                      <div key={r.case_id} className="bg-white rounded-xl shadow-sm overflow-hidden">
+                        <button
+                          onClick={() => setExpandedCategory(isExpanded ? null : ('tp_' + r.case_id))}
+                          className="w-full p-4 text-left hover:bg-gray-50 transition"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${r.score >= 80 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                                  {r.score}点
+                                </span>
+                                {c && <span className="text-xs text-gray-400">{c.category}</span>}
+                              </div>
+                              <p className="text-sm font-bold text-gray-800 truncate">{c?.title || r.case_id}</p>
+                              <p className="text-xs text-gray-400 mt-0.5">
+                                {new Date(r.created_at).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' })}
+                              </p>
+                            </div>
+                            <span className={`text-gray-400 text-xs transition-transform flex-shrink-0 mt-1 ${isExpanded ? 'rotate-180' : ''}`}>▼</span>
+                          </div>
+                          {/* 折りたたみ時：Teaching Pointの冒頭を表示 */}
+                          {!isExpanded && (
+                            <p className="text-xs text-blue-700 mt-2 line-clamp-2 leading-relaxed">
+                              📌 {tp.substring(0, 80)}...
+                            </p>
+                          )}
+                        </button>
+                        {/* 展開時：全文表示 */}
+                        {isExpanded && (
+                          <div className="border-t border-blue-100 bg-blue-50 p-4">
+                            <p className="text-xs font-bold text-blue-600 mb-2">📌 Teaching Point</p>
+                            <div className="space-y-3">
+                              {tp.includes('①') ? (
+                                tp.split(/(?=①|②|③)/).filter(s => s.trim()).map((section, i) => (
+                                  <p key={i} className="text-sm text-blue-800 leading-relaxed">{section.trim()}</p>
+                                ))
+                              ) : (
+                                <p className="text-sm text-blue-800 leading-relaxed">{tp}</p>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => router.push(`/cases/${r.case_id}`)}
+                              className="mt-3 text-xs text-blue-600 font-bold hover:text-blue-800"
+                            >
+                              この症例を再挑戦する →
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                {latestResults.filter(r => r.feedback?.teaching_point).length === 0 && (
+                  <div className="text-center py-8 text-gray-400">
+                    <p className="text-sm">Teaching Pointのある成績がありません</p>
+                    <p className="text-xs mt-1">症例に挑戦して採点を受けると表示されます</p>
+                  </div>
+                )}
               </>
             )}
           </div>
