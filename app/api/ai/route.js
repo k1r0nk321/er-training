@@ -11,7 +11,7 @@ export async function POST(req) {
       ...history,
       {
         role: "user",
-        content: imageUrl
+        content: imageUrlh
           ? [
               {
                 type: "image",
@@ -24,7 +24,7 @@ export async function POST(req) {
     ];
 
     const response = await client.messages.create({
-      model: "claude-sonnet-4-5-20251001",
+      model: "claude-sonnet-4-5-20250929",
       max_tokens: 2048,
       system,
       messages
