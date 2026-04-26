@@ -99,9 +99,12 @@ export default function HomePage() {
 
   const [announcements, setAnnouncements] = useState([]);
 
+  const [appUpdates, setAppUpdates] = useState([]);
+
   useEffect(() => {
     fetchAnnouncements();
     fetchTrialPw();
+    fetchAppUpdates();
   }, []);
 
   const fetchAnnouncements = async () => {
@@ -111,6 +114,15 @@ export default function HomePage() {
       .order('created_at', { ascending: false })
       .limit(5);
     setAnnouncements(data || []);
+  };
+
+  const fetchAppUpdates = async () => {
+    const { data } = await supabase
+      .from('app_updates')
+      .select('id, title, category, created_at')
+      .order('created_at', { ascending: false })
+      .limit(3);
+    setAppUpdates(data || []);
   };
 
   const fetchTrialPw = async () => {
@@ -762,6 +774,24 @@ export default function HomePage() {
                   {a.important ? '🔴 ' : '📢 '}{a.title}
                 </p>
                 {a.body && <p className={`text-xs mt-1 ${a.important ? 'text-red-700' : 'text-gray-500'}`}>{a.body}</p>}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* アップデート情報（最新3件） */}
+        {appUpdates.length > 0 && (
+          <div className="bg-white border border-gray-100 shadow-sm rounded-xl p-4 space-y-2">
+            <p className="text-xs font-bold text-gray-500">🆕 最新のアップデート</p>
+            {appUpdates.map(u => (
+              <div key={u.id} className="flex items-start gap-2">
+                <span className={`text-xs px-1.5 py-0.5 rounded font-bold flex-shrink-0 ${
+                  u.category === '機能追加' ? 'bg-blue-100 text-blue-600' :
+                  u.category === '改善' ? 'bg-green-100 text-green-600' :
+                  u.category === '修正' ? 'bg-orange-100 text-orange-600' :
+                  'bg-purple-100 text-purple-600'
+                }`}>{u.category}</span>
+                <p className="text-xs text-gray-600">{u.title}</p>
               </div>
             ))}
           </div>
