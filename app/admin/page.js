@@ -395,7 +395,9 @@ export default function AdminPage() {
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="text-left px-4 py-3 text-gray-500 font-medium">名前</th>
-                      <th className="text-left px-4 py-3 text-gray-500 font-medium">身分</th>
+                      <th className="text-left px-4 py-3 text-gray-500 font-medium">身分・所属</th>
+                      <th className="text-left px-4 py-3 text-gray-500 font-medium">登録日</th>
+                      <th className="text-left px-4 py-3 text-gray-500 font-medium">最終利用日</th>
                       <th className="text-right px-4 py-3 text-gray-500 font-medium">挑戦数</th>
                       <th className="text-right px-4 py-3 text-gray-500 font-medium">合格率</th>
                       <th className="text-right px-4 py-3 text-gray-500 font-medium">平均点</th>
@@ -406,13 +408,23 @@ export default function AdminPage() {
                       const ur = results.filter(r => r.user_id === u.id);
                       const avg = ur.length > 0 ? Math.round(ur.reduce((s, r) => s + r.score, 0) / ur.length) : null;
                       const pr = ur.length > 0 ? Math.round((ur.filter(r => r.passed).length / ur.length) * 100) : null;
+                      // 最終利用日：resultsの最新created_at
+                      const lastUsed = ur.length > 0
+                        ? new Date(Math.max(...ur.map(r => new Date(r.created_at).getTime())))
+                        : null;
+                      const fmtDate = (d) => d ? new Date(d).toLocaleDateString('ja-JP', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
                       return (
                         <tr key={u.id} className="border-t hover:bg-gray-50">
                           <td className="px-4 py-3">
                             <div className="font-medium text-gray-800">{u.name}</div>
                             <div className="text-xs text-gray-400">{u.email}</div>
                           </td>
-                          <td className="px-4 py-3 text-gray-600">{u.role}</td>
+                          <td className="px-4 py-3">
+                            <div className="text-sm text-gray-700">{u.role}</div>
+                            {u.department && <div className="text-xs text-blue-600 mt-0.5">{u.department}</div>}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-500">{fmtDate(u.created_at)}</td>
+                          <td className="px-4 py-3 text-sm text-gray-500">{lastUsed ? fmtDate(lastUsed) : <span className="text-gray-300">未利用</span>}</td>
                           <td className="px-4 py-3 text-right text-gray-600">{ur.length}</td>
                           <td className="px-4 py-3 text-right font-bold">
                             {pr !== null ? <span className={pr >= 80 ? 'text-green-600' : 'text-orange-500'}>{pr}%</span> : <span className="text-gray-300">—</span>}
