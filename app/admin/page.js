@@ -33,6 +33,12 @@ export default function AdminPage() {
   const [cases, setCases] = useState([]);
   const [results, setResults] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
+  const [appUpdates, setAppUpdates] = useState([]);
+  // アップデート情報編集用
+  const [newUpdate, setNewUpdate] = useState({ title: '', body: '', category: '機能追加' });
+  const [postingUpdate, setPostingUpdate] = useState(false);
+  const [editingUpdate, setEditingUpdate] = useState(null);
+  const [editUpdateData, setEditUpdateData] = useState({});
   const [loadingData, setLoadingData] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
 
@@ -81,18 +87,21 @@ export default function AdminPage() {
       { data: casesData },
       { data: resultsData },
       { data: announceData },
+      { data: updatesData },
       { data: pwData },
     ] = await Promise.all([
       supabase.from('users').select('*').order('created_at', { ascending: false }),
       supabase.from('cases').select('*').order('created_at', { ascending: false }),
       supabase.from('results').select('*').order('created_at', { ascending: false }),
       supabase.from('announcements').select('*').order('created_at', { ascending: false }),
+      supabase.from('app_updates').select('*').order('created_at', { ascending: false }),
       supabase.from('app_settings').select('value').eq('key', 'trial_password').single(),
     ]);
     setUsers(usersData || []);
     setCases(casesData || []);
     setResults(resultsData || []);
     setAnnouncements(announceData || []);
+    setAppUpdates(updatesData || []);
     if (pwData) setCurrentTrialPw(pwData.value || '');
     computeStats(usersData || [], casesData || [], resultsData || []);
     setLoadingData(false);
@@ -294,6 +303,7 @@ export default function AdminPage() {
             { key: 'users',    label: '👥 利用者' },
             { key: 'cases',    label: '📋 症例' },
             { key: 'announce', label: '📢 お知らせ' },
+            { key: 'updates',  label: '🆕 更新情報' },
             { key: 'settings', label: '⚙️ 設定' },
           ].map(t => (
             <button key={t.key} onClick={() => { setActiveTab(t.key); setEditingCase(null); }}
@@ -693,6 +703,142 @@ export default function AdminPage() {
                 </div>
               ))}
               {announcements.length === 0 && <p className="text-center text-gray-400 py-8">お知らせはありません</p>}
+            </div>
+          </div>
+        )}
+
+        {/* ==== アップデート情報管理タブ ==== */}
+        {activeTab === 'updates' && (
+          <div className="space-y-5">
+            <h2 className="font-bold text-gray-700">アップデート情報管理</h2>
+
+            {/* 新規追加フォーム */}
+            <div className="bg-white rounded-xl shadow-sm p-5 space-y-3 border-2 border-emerald-100">
+              <h3 className="font-bold text-emerald-700">＋ 新規アップデート情報を追加</h3>
+              <input
+                value={newUpdate.title}
+                onChange={e => setNewUpdate({ ...newUpdate, title: e.target.value })}
+                placeholder="タイトル *"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
+              />
+              <textarea
+                value={newUpdate.body}
+                onChange={e => setNewUpdate({ ...newUpdate, body: e.target.value })}
+                placeholder="内容（利用者向けに分かりやすく簡潔に）*"
+                rows={3}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300 resize-none"
+              />
+              <div className="flex gap-2 items-center">
+                <label className="text-xs font-bold text-gray-600">カテゴリ：</label>
+                <select
+                  value={newUpdate.category}
+                  onChange={e => setNewUpdate({ ...newUpdate, category: e.target.value })}
+                  className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none"
+                >
+                  {['機能追加', '改善', '修正', '症例追加'].map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+              <button
+                onClick={async () => {
+                  if (!newUpdate.title.trim() || !newUpdate.body.trim()) { alert('タイトルと内容を入力してください'); return; }
+                  setPostingUpdate(true);
+                  await supabase.from('app_updates').insert({ title: newUpdate.title, body: newUpdate.body, category: newUpdate.category });
+                  setNewUpdate({ title: '', body: '', category: '機能追加' });
+                  fetchAll();
+                  setPostingUpdate(false);
+                }}
+                disabled={postingUpdate || !newUpdate.title.trim() || !newUpdate.body.trim()}
+                className="w-full bg-emerald-600 text-white py-2 rounded-xl text-sm font-bold hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {postingUpdate ? '追加中...' : '✓ 追加する'}
+              </button>
+            </div>
+
+            {/* 既存一覧 */}
+            <div className="space-y-3">
+              <h3 className="font-bold text-gray-700 text-sm">登録済みアップデート情報（{appUpdates.length}件）</h3>
+              {appUpdates.map(u => (
+                <div key={u.id} className="bg-white rounded-xl shadow-sm p-4">
+                  {editingUpdate?.id === u.id ? (
+                    // 編集フォーム
+                    <div className="space-y-2">
+                      <input
+                        value={editUpdateData.title || ''}
+                        onChange={e => setEditUpdateData({ ...editUpdateData, title: e.target.value })}
+                        className="w-full border border-blue-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                      />
+                      <textarea
+                        value={editUpdateData.body || ''}
+                        onChange={e => setEditUpdateData({ ...editUpdateData, body: e.target.value })}
+                        rows={3}
+                        className="w-full border border-blue-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"
+                      />
+                      <select
+                        value={editUpdateData.category || '改善'}
+                        onChange={e => setEditUpdateData({ ...editUpdateData, category: e.target.value })}
+                        className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm"
+                      >
+                        {['機能追加', '改善', '修正', '症例追加'].map(c => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => { setEditingUpdate(null); setEditUpdateData({}); }}
+                          className="flex-1 border border-gray-300 text-gray-600 py-1.5 rounded-lg text-xs font-bold"
+                        >キャンセル</button>
+                        <button
+                          onClick={async () => {
+                            await supabase.from('app_updates').update({ title: editUpdateData.title, body: editUpdateData.body, category: editUpdateData.category }).eq('id', u.id);
+                            setEditingUpdate(null);
+                            setEditUpdateData({});
+                            fetchAll();
+                          }}
+                          className="flex-1 bg-blue-600 text-white py-1.5 rounded-lg text-xs font-bold hover:bg-blue-700"
+                        >💾 保存</button>
+                      </div>
+                    </div>
+                  ) : (
+                    // 表示
+                    <div>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
+                              u.category === '機能追加' ? 'bg-blue-100 text-blue-700' :
+                              u.category === '改善' ? 'bg-green-100 text-green-700' :
+                              u.category === '修正' ? 'bg-orange-100 text-orange-700' :
+                              'bg-purple-100 text-purple-700'
+                            }`}>{u.category}</span>
+                            <span className="text-xs text-gray-400">{new Date(u.created_at).toLocaleDateString('ja-JP')}</span>
+                          </div>
+                          <p className="text-sm font-bold text-gray-800">{u.title}</p>
+                          <p className="text-xs text-gray-500 mt-1">{u.body}</p>
+                        </div>
+                        <div className="flex gap-1 flex-shrink-0">
+                          <button
+                            onClick={() => { setEditingUpdate(u); setEditUpdateData({ title: u.title, body: u.body, category: u.category }); }}
+                            className="text-xs px-2 py-1 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 font-bold"
+                          >✏️ 編集</button>
+                          <button
+                            onClick={async () => {
+                              if (!confirm('このアップデート情報を削除しますか？')) return;
+                              await supabase.from('app_updates').delete().eq('id', u.id);
+                              fetchAll();
+                            }}
+                            className="text-xs px-2 py-1 bg-red-50 text-red-400 rounded-lg hover:bg-red-100 font-bold"
+                          >削除</button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+              {appUpdates.length === 0 && (
+                <p className="text-center text-gray-400 py-6 text-sm">アップデート情報がありません</p>
+              )}
             </div>
           </div>
         )}
