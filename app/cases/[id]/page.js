@@ -458,7 +458,7 @@ ${finalDiagnosis}
   "workup_feedback": "検査選択の適切さ1〜2文",
   "good_points": "よかった点1〜2文",
   "improvement": "診断過程における改善点1〜2文",
-  "teaching_point": "この症例で研修医が知っておくべき知識（治療・診断基準を含めてよい）1〜2文"
+  "teaching_point": "【Teaching Point】\n本症例で研修医が理解できていなかった点・間違えた点を中心に、以下の3点を詳細に解説してください（各100〜150字）：\n①診断の核心：この疾患を診断するうえで最も重要な思考プロセスや見落としがちな点\n②検査・問診の要点：適切な問診・検査選択のポイントと、研修医が不足していた観点\n③臨床的知識：治療方針・診断基準・類似疾患との鑑別など、この症例で知っておくべき実践的知識"
 }`;
 
     try {
@@ -626,9 +626,17 @@ ${finalDiagnosis}
                 <p className="text-sm text-gray-700 mt-1">{scoreResult.improvement}</p></div>
             )}
             {scoreResult.teaching_point && (
-              <div className="bg-blue-50 rounded-lg p-3">
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
                 <span className="text-xs font-bold text-blue-600">📌 Teaching Point</span>
-                <p className="text-sm text-blue-800 mt-1 font-medium">{scoreResult.teaching_point}</p>
+                <div className="mt-2 space-y-3">
+                  {scoreResult.teaching_point.includes('①') ? (
+                    scoreResult.teaching_point.split(/(?=①|②|③)/).filter(s => s.trim()).map((section, i) => (
+                      <p key={i} className="text-sm text-blue-800 leading-relaxed">{section.trim()}</p>
+                    ))
+                  ) : (
+                    <p className="text-sm text-blue-800 leading-relaxed font-medium">{scoreResult.teaching_point}</p>
+                  )}
+                </div>
               </div>
             )}
           </div>
