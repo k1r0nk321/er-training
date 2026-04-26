@@ -536,6 +536,19 @@ export default function HomePage() {
             </button>
           </div>
 
+          {/* アップデート情報 */}
+          <button
+            onClick={() => router.push('/updates')}
+            className="w-full bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl p-4 text-left hover:bg-emerald-100 transition flex items-center gap-3"
+          >
+            <span className="text-2xl flex-shrink-0">🆕</span>
+            <div className="flex-1 min-w-0">
+              <div className="font-bold text-sm">アップデート情報</div>
+              <div className="text-xs text-emerald-600 mt-0.5">最新の機能改善・追加情報（過去5日分）</div>
+            </div>
+            <span className="text-emerald-400 text-sm flex-shrink-0">→</span>
+          </button>
+
           {isAdmin && (
             <button
               onClick={() => router.push('/admin')}
