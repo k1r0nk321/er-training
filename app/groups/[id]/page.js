@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { useAuth } from '../../../lib/auth-context';
-import { supabase } from '../../../lib/supabase';
+import { useAuth } from '../../lib/auth-context';
+import { supabase } from '../../lib/supabase';
 
 export default function GroupDetailPage() {
   const { user } = useAuth();
