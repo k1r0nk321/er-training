@@ -1,0 +1,233 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useRouter, useParams } from 'next/navigation';
+import { useAuth } from '../../../lib/auth-context';
+import { supabase } from '../../../lib/supabase';
+
+export default function GroupDetailPage() {
+  const { user } = useAuth();
+  const router = useRouter();
+  const { id } = useParams();
+
+  const [group, setGroup] = useState(null);
+  const [members, setMembers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState('');
+  const [showConfirm, setShowConfirm] = useState(false); // 解散/脱退確認
+  const [processing, setProcessing] = useState(false);
+
+  useEffect(() => {
+    if (!user || !id) return;
+    fetchGroupDetail();
+  }, [user, id]);
+
+  async function fetchGroupDetail() {
+    setLoading(true);
+
+    // グループ情報取得
+    const { data: groupData } = await supabase
+      .from('groups')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (!groupData) {
+      router.push('/groups');
+      return;
+    }
+    setGroup(groupData);
+
+    // メンバー一覧取得
+    const { data: memberRows } = await supabase
+      .from('group_members')
+      .select('user_id, joined_at')
+      .eq('group_id', id);
+
+    if (!memberRows || memberRows.length === 0) {
+      setMembers([]);
+      setLoading(false);
+      return;
+    }
+
+    const userIds = memberRows.map(r => r.user_id);
+
+    // usersテーブルから名前・身分取得
+    const { data: usersData } = await supabase
+      .from('users')
+      .select('id, name, department, role')
+      .in('id', userIds);
+
+    // resultsテーブルから成績集計
+    const statsArr = await Promise.all(userIds.map(async (uid) => {
+      // 挑戦済み症例数（ユニーク）
+      const { data: uniqueCases } = await supabase
+        .from('results')
+        .select('case_id')
+        .eq('user_id', uid);
+      const uniqueCaseIds = new Set((uniqueCases || []).map(r => r.case_id));
+
+      // 合格症例数（ユニークcase_idのうち1回でも合格したもの）
+      const { data: passedRows } = await supabase
+        .from('results')
+        .select('case_id')
+        .eq('user_id', uid)
+        .eq('passed', true);
+      const passedCaseIds = new Set((passedRows || []).map(r => r.case_id));
+
+      // 延べ挑戦回数
+      const { count: totalCount } = await supabase
+        .from('results')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', uid);
+
+      return {
+        user_id: uid,
+        unique_cases: uniqueCaseIds.size,
+        passed_cases: passedCaseIds.size,
+        total_attempts: totalCount || 0,
+      };
+    }));
+
+    // ユーザー情報と成績をマージ
+    const merged = memberRows.map(m => {
+      const userData = (usersData || []).find(u => u.id === m.user_id) || {};
+      const stats = statsArr.find(s => s.user_id === m.user_id) || {};
+      return {
+        user_id: m.user_id,
+        name: userData.name || '（名前なし）',
+        department: userData.department || '',
+        role: userData.role || '',
+        joined_at: m.joined_at,
+        ...stats,
+      };
+    });
+
+    // 合格症例数の多い順にソート
+    merged.sort((a, b) => b.passed_cases - a.passed_cases);
+    setMembers(merged);
+    setLoading(false);
+  }
+
+  const isCreator = group?.created_by === user?.id;
+
+  async function handleLeave() {
+    setProcessing(true);
+    if (isCreator) {
+      // 解散：group_membersを全削除→groupsを削除（CASCADE）
+      await supabase.from('group_members').delete().eq('group_id', id);
+      await supabase.from('groups').delete().eq('id', id);
+    } else {
+      // 脱退：自分のメンバーレコードを削除
+      await supabase.from('group_members').delete().eq('group_id', id).eq('user_id', user.id);
+    }
+    setProcessing(false);
+    router.push('/groups');
+  }
+
+  if (!user) return null;
+
+  return (
+    <div className="min-h-screen bg-gray-50 px-4 py-6">
+      <div className="max-w-xl mx-auto space-y-4">
+
+        {/* ヘッダー */}
+        <div className="flex items-center gap-3 mb-2">
+          <button onClick={() => router.push('/groups')} className="text-gray-400 hover:text-gray-600 text-sm">← 戻る</button>
+          <h1 className="text-xl font-bold text-gray-900">👥 {group?.name || 'グループ'}</h1>
+        </div>
+
+        {/* メッセージ */}
+        {message && (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm text-blue-800">{message}</div>
+        )}
+
+        {/* 招待コード表示 */}
+        {group && (
+          <div className="bg-white rounded-xl shadow-sm p-4">
+            <p className="text-xs text-gray-400 mb-1">招待コード（このコードを共有してメンバーを招待）</p>
+            <div className="flex items-center gap-3">
+              <span className="text-2xl font-mono font-bold tracking-widest text-blue-700">{group.invite_code}</span>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(group.invite_code);
+                  setMessage('招待コードをコピーしました！');
+                  setTimeout(() => setMessage(''), 2000);
+                }}
+                className="text-xs bg-blue-50 text-blue-600 px-3 py-1 rounded-lg hover:bg-blue-100"
+              >
+                コピー
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 成績一覧 */}
+        {loading ? (
+          <div className="text-center py-8 text-gray-400 text-sm">読み込み中...</div>
+        ) : (
+          <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+            <div className="p-4 border-b border-gray-100">
+              <p className="font-bold text-gray-800 text-sm">メンバー成績（{members.length}人）</p>
+            </div>
+            {/* ヘッダー行 */}
+            <div className="grid grid-cols-4 text-xs text-gray-400 font-medium px-4 py-2 bg-gray-50">
+              <span>名前</span>
+              <span className="text-center">挑戦症例</span>
+              <span className="text-center">合格症例</span>
+              <span className="text-center">延べ回数</span>
+            </div>
+            {members.length === 0 ? (
+              <p className="text-center py-6 text-gray-400 text-sm">メンバーがいません</p>
+            ) : (
+              members.map((m, i) => (
+                <div key={m.user_id} className={`grid grid-cols-4 px-4 py-3 items-center text-sm border-b border-gray-50 ${m.user_id === user.id ? 'bg-blue-50' : ''}`}>
+                  <div>
+                    <span className="text-gray-400 text-xs mr-1">{i + 1}.</span>
+                    <span className="font-medium text-gray-800">{m.name}</span>
+                    {m.user_id === user.id && <span className="ml-1 text-xs text-blue-500">（自分）</span>}
+                    {m.user_id === group?.created_by && <span className="ml-1 text-xs text-yellow-500">👑</span>}
+                    {m.department && <p className="text-xs text-gray-400">{m.department}</p>}
+                  </div>
+                  <span className="text-center font-bold text-gray-700">{m.unique_cases}</span>
+                  <span className="text-center font-bold text-green-600">{m.passed_cases}</span>
+                  <span className="text-center text-gray-500">{m.total_attempts}</span>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* 脱退・解散ボタン */}
+        {!showConfirm ? (
+          <button
+            onClick={() => setShowConfirm(true)}
+            className={`w-full py-3 rounded-xl text-sm font-bold border-2 transition ${
+              isCreator
+                ? 'border-red-300 text-red-500 hover:bg-red-50'
+                : 'border-gray-300 text-gray-500 hover:bg-gray-50'
+            }`}
+          >
+            {isCreator ? '🗑️ このグループを解散する' : '🚪 このグループを脱退する'}
+          </button>
+        ) : (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 space-y-3">
+            <p className="text-sm font-bold text-red-700">
+              {isCreator ? 'グループを解散しますか？この操作は取り消せません。' : 'このグループを脱退しますか？'}
+            </p>
+            <div className="flex gap-3">
+              <button onClick={handleLeave} disabled={processing}
+                className="flex-1 bg-red-600 text-white py-2 rounded-lg text-sm font-bold hover:bg-red-700 disabled:opacity-50">
+                {processing ? '処理中...' : isCreator ? '解散する' : '脱退する'}
+              </button>
+              <button onClick={() => setShowConfirm(false)}
+                className="flex-1 border border-gray-300 text-gray-600 py-2 rounded-lg text-sm hover:bg-gray-50">
+                キャンセル
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
