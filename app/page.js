@@ -557,7 +557,7 @@ export default function HomePage() {
           </div>
 
           {/* アップデート情報 */}
-onClick={() => router.push('/updates')}
+<button onClick={() => router.push('/updates')}
             className="w-full bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl p-4 text-left hover:bg-emerald-100 transition flex items-center gap-3"
           >
             <span className="text-2xl flex-shrink-0">🆕</span>
