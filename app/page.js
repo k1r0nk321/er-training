@@ -546,11 +546,18 @@ export default function HomePage() {
               <div className="font-bold text-base">成績一覧</div>
               <div className="text-xs text-indigo-200 mt-0.5">過去の記録</div>
             </button>
+                            <button
+                              onClick={() => router.push('/groups')}
+                                              className="col-span-2 bg-teal-600 text-white rounded-2xl p-5 text-left hover:bg-teal-700 transition shadow-sm"
+                                                            >
+                                                              <div className="text-3xl mb-1">&#x1F465;</div>
+                                                              <div className="font-bold text-base">&#x30B0;&#x30EB;&#x30FC;&#x30D7;</div>
+                                                              <div className="text-xs text-teal-200 mt-0.5">&#x6210;&#x7E3E;&#x3092;&#x5171;&#x6709;&#x3057;&#x3066;&#x4E00;&#x7DD2;&#x306B;&#x5B66;&#x3076;</div>
+                                                </button>
           </div>
 
           {/* アップデート情報 */}
-          <button
-            onClick={() => router.push('/updates')}
+onClick={() => router.push('/updates')}
             className="w-full bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl p-4 text-left hover:bg-emerald-100 transition flex items-center gap-3"
           >
             <span className="text-2xl flex-shrink-0">🆕</span>
