@@ -74,14 +74,13 @@ export default function GroupDetailPage() {
   }
 
   function formatLastLogin(dateStr) {
-    if (!dateStr) return 'ログイン記録なし';
+    if (!dateStr) return '-';
     var d = new Date(dateStr);
     var now = new Date();
     var diffMs = now - d;
     var diffMin = Math.floor(diffMs / 60000);
     var diffH = Math.floor(diffMin / 60);
     var diffD = Math.floor(diffH / 24);
-
     if (diffMin < 1) return 'たった今';
     if (diffMin < 60) return diffMin + '分前';
     if (diffH < 24) return diffH + '時間前';
@@ -95,7 +94,7 @@ export default function GroupDetailPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 px-4 py-6">
-      <div className="max-w-xl mx-auto space-y-4">
+      <div className="max-w-2xl mx-auto space-y-4">
 
         <div className="flex items-center gap-3 mb-2">
           <button
@@ -139,11 +138,11 @@ export default function GroupDetailPage() {
             <div className="p-4 border-b border-gray-100">
               <p className="font-bold text-gray-800 text-sm">メンバー成績（{members.length}人）</p>
             </div>
-            {/* ヘッダー行 */}
-            <div className="grid grid-cols-5 text-xs text-gray-400 font-medium px-4 py-2 bg-gray-50">
+            <div className="grid grid-cols-6 text-xs text-gray-400 font-medium px-4 py-2 bg-gray-50">
               <span className="col-span-2">名前</span>
-              <span className="text-center">挑戦</span>
-              <span className="text-center">合格</span>
+              <span className="text-center">挑戦症例</span>
+              <span className="text-center">合格症例</span>
+              <span className="text-center">延べ回数</span>
               <span className="text-center">最終ログイン</span>
             </div>
             {members.length === 0 ? (
@@ -153,7 +152,7 @@ export default function GroupDetailPage() {
                 return (
                   <div
                     key={m.user_id}
-                    className={'grid grid-cols-5 px-4 py-3 items-center text-sm border-b border-gray-50' + (m.user_id === user.id ? ' bg-blue-50' : '')}
+                    className={'grid grid-cols-6 px-4 py-3 items-center text-sm border-b border-gray-50' + (m.user_id === user.id ? ' bg-blue-50' : '')}
                   >
                     <div className="col-span-2">
                       <div className="flex items-center gap-1 flex-wrap">
@@ -166,7 +165,8 @@ export default function GroupDetailPage() {
                     </div>
                     <span className="text-center font-bold text-gray-700">{m.unique_cases}</span>
                     <span className="text-center font-bold text-green-600">{m.passed_cases}</span>
-                    <span className="text-center text-xs text-gray-500">{formatLastLogin(m.last_sign_in_at)}</span>
+                    <span className="text-center text-gray-500">{m.total_attempts}</span>
+                    <span className="text-center text-xs text-gray-400">{formatLastLogin(m.last_sign_in_at)}</span>
                   </div>
                 );
               })
