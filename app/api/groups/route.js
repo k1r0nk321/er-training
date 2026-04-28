@@ -1,6 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
 
-// サービスキーを使ったサーバーサイドクライアント（RLSをバイパス）
 function getAdminClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -33,7 +32,6 @@ export async function POST(req) {
         return Response.json({ error: 'グループ名を入力してください' }, { status: 400 });
       }
 
-      // 招待コード生成（重複チェック付き）
       let code = generateInviteCode();
       let attempts = 0;
       while (attempts < 10) {
@@ -47,7 +45,6 @@ export async function POST(req) {
         attempts++;
       }
 
-      // グループ作成
       const { data: group, error: gErr } = await supabase
         .from('groups')
         .insert({ name: groupName.trim(), invite_code: code, created_by: userId })
@@ -58,10 +55,7 @@ export async function POST(req) {
         return Response.json({ error: 'グループの作成に失敗しました', detail: gErr.message }, { status: 500 });
       }
 
-      // 作成者をメンバーに追加
-      await supabase
-        .from('group_members')
-        .insert({ group_id: group.id, user_id: userId });
+      await supabase.from('group_members').insert({ group_id: group.id, user_id: userId });
 
       return Response.json({ success: true, group });
     }
@@ -73,31 +67,20 @@ export async function POST(req) {
       }
 
       const code = inviteCode.trim().toUpperCase();
-
-      const { data: group } = await supabase
-        .from('groups')
-        .select('*')
-        .eq('invite_code', code)
-        .maybeSingle();
+      const { data: group } = await supabase.from('groups').select('*').eq('invite_code', code).maybeSingle();
 
       if (!group) {
         return Response.json({ error: '招待コードが見つかりません' }, { status: 404 });
       }
 
       const { data: already } = await supabase
-        .from('group_members')
-        .select('id')
-        .eq('group_id', group.id)
-        .eq('user_id', userId)
-        .maybeSingle();
+        .from('group_members').select('id').eq('group_id', group.id).eq('user_id', userId).maybeSingle();
 
       if (already) {
         return Response.json({ error: 'すでにこのグループに参加しています' }, { status: 400 });
       }
 
-      const { error: joinErr } = await supabase
-        .from('group_members')
-        .insert({ group_id: group.id, user_id: userId });
+      const { error: joinErr } = await supabase.from('group_members').insert({ group_id: group.id, user_id: userId });
 
       if (joinErr) {
         return Response.json({ error: '参加に失敗しました', detail: joinErr.message }, { status: 500 });
@@ -106,51 +89,91 @@ export async function POST(req) {
       return Response.json({ success: true, group });
     }
 
-    // グループ一覧取得
+    // グループ一覧
     if (action === 'list') {
       const { data: memberRows } = await supabase
-        .from('group_members')
-        .select('group_id')
-        .eq('user_id', userId);
+        .from('group_members').select('group_id').eq('user_id', userId);
 
       if (!memberRows || memberRows.length === 0) {
         return Response.json({ groups: [] });
       }
 
-      const groupIds = memberRows.map(r => r.group_id);
+      const groupIds = memberRows.map(function(r) { return r.group_id; });
+      const { data: groups } = await supabase.from('groups').select('*').in('id', groupIds).order('created_at', { ascending: false });
 
-      const { data: groups } = await supabase
-        .from('groups')
-        .select('*')
-        .in('id', groupIds)
-        .order('created_at', { ascending: false });
-
-      // メンバー数取得
-      const groupsWithCount = await Promise.all((groups || []).map(async (g) => {
-        const { count } = await supabase
-          .from('group_members')
-          .select('*', { count: 'exact', head: true })
-          .eq('group_id', g.id);
-        return { ...g, member_count: count || 0 };
+      const groupsWithCount = await Promise.all((groups || []).map(async function(g) {
+        const { count } = await supabase.from('group_members').select('*', { count: 'exact', head: true }).eq('group_id', g.id);
+        return Object.assign({}, g, { member_count: count || 0 });
       }));
 
       return Response.json({ groups: groupsWithCount });
     }
 
+    // グループ詳細（メンバー成績含む）
+    if (action === 'detail') {
+      if (!groupId) {
+        return Response.json({ error: 'グループIDが必要です' }, { status: 400 });
+      }
+
+      // グループ情報取得
+      const { data: group } = await supabase.from('groups').select('*').eq('id', groupId).single();
+      if (!group) {
+        return Response.json({ error: 'グループが見つかりません' }, { status: 404 });
+      }
+
+      // メンバー一覧取得
+      const { data: memberRows } = await supabase.from('group_members').select('user_id, joined_at').eq('group_id', groupId);
+
+      if (!memberRows || memberRows.length === 0) {
+        return Response.json({ group, members: [] });
+      }
+
+      const userIds = memberRows.map(function(r) { return r.user_id; });
+
+      // ユーザー情報取得
+      const { data: usersData } = await supabase.from('users').select('id, name, department, role').in('id', userIds);
+
+      // 成績集計
+      const statsArr = await Promise.all(userIds.map(async function(uid) {
+        const { data: uniqueCases } = await supabase.from('results').select('case_id').eq('user_id', uid);
+        const uniqueCaseIds = new Set((uniqueCases || []).map(function(r) { return r.case_id; }));
+
+        const { data: passedRows } = await supabase.from('results').select('case_id').eq('user_id', uid).eq('passed', true);
+        const passedCaseIds = new Set((passedRows || []).map(function(r) { return r.case_id; }));
+
+        const { count: totalCount } = await supabase.from('results').select('*', { count: 'exact', head: true }).eq('user_id', uid);
+
+        return {
+          user_id: uid,
+          unique_cases: uniqueCaseIds.size,
+          passed_cases: passedCaseIds.size,
+          total_attempts: totalCount || 0,
+        };
+      }));
+
+      const members = memberRows.map(function(m) {
+        const userData = (usersData || []).find(function(u) { return u.id === m.user_id; }) || {};
+        const stats = statsArr.find(function(s) { return s.user_id === m.user_id; }) || {};
+        return Object.assign({ user_id: m.user_id, name: userData.name || '（名前なし）', department: userData.department || '', role: userData.role || '' }, stats);
+      });
+
+      members.sort(function(a, b) { return b.passed_cases - a.passed_cases; });
+
+      return Response.json({ group, members });
+    }
+
     // 脱退・解散
     if (action === 'leave') {
-      const { data: group } = await supabase
-        .from('groups')
-        .select('created_by')
-        .eq('id', groupId)
-        .single();
+      if (!groupId) {
+        return Response.json({ error: 'グループIDが必要です' }, { status: 400 });
+      }
+
+      const { data: group } = await supabase.from('groups').select('created_by').eq('id', groupId).single();
 
       if (group && group.created_by === userId) {
-        // 解散
         await supabase.from('group_members').delete().eq('group_id', groupId);
         await supabase.from('groups').delete().eq('id', groupId);
       } else {
-        // 脱退
         await supabase.from('group_members').delete().eq('group_id', groupId).eq('user_id', userId);
       }
 
