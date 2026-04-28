@@ -36,10 +36,7 @@ export async function POST(req) {
       let attempts = 0;
       while (attempts < 10) {
         const { data: existing } = await supabase
-          .from('groups')
-          .select('id')
-          .eq('invite_code', code)
-          .maybeSingle();
+          .from('groups').select('id').eq('invite_code', code).maybeSingle();
         if (!existing) break;
         code = generateInviteCode();
         attempts++;
@@ -48,15 +45,13 @@ export async function POST(req) {
       const { data: group, error: gErr } = await supabase
         .from('groups')
         .insert({ name: groupName.trim(), invite_code: code, created_by: userId })
-        .select()
-        .single();
+        .select().single();
 
       if (gErr) {
         return Response.json({ error: 'グループの作成に失敗しました', detail: gErr.message }, { status: 500 });
       }
 
       await supabase.from('group_members').insert({ group_id: group.id, user_id: userId });
-
       return Response.json({ success: true, group });
     }
 
@@ -109,19 +104,17 @@ export async function POST(req) {
       return Response.json({ groups: groupsWithCount });
     }
 
-    // グループ詳細（メンバー成績含む）
+    // グループ詳細（メンバー成績 + 最終ログイン時間）
     if (action === 'detail') {
       if (!groupId) {
         return Response.json({ error: 'グループIDが必要です' }, { status: 400 });
       }
 
-      // グループ情報取得
       const { data: group } = await supabase.from('groups').select('*').eq('id', groupId).single();
       if (!group) {
         return Response.json({ error: 'グループが見つかりません' }, { status: 404 });
       }
 
-      // メンバー一覧取得
       const { data: memberRows } = await supabase.from('group_members').select('user_id, joined_at').eq('group_id', groupId);
 
       if (!memberRows || memberRows.length === 0) {
@@ -130,8 +123,17 @@ export async function POST(req) {
 
       const userIds = memberRows.map(function(r) { return r.user_id; });
 
-      // ユーザー情報取得
+      // usersテーブル（名前・所属）
       const { data: usersData } = await supabase.from('users').select('id, name, department, role').in('id', userIds);
+
+      // auth.usersから最終ログイン時間を取得（service_roleキーで可能）
+      const { data: authData } = await supabase.auth.admin.listUsers();
+      const authUsersMap = {};
+      if (authData && authData.users) {
+        authData.users.forEach(function(u) {
+          authUsersMap[u.id] = u.last_sign_in_at;
+        });
+      }
 
       // 成績集計
       const statsArr = await Promise.all(userIds.map(async function(uid) {
@@ -154,7 +156,13 @@ export async function POST(req) {
       const members = memberRows.map(function(m) {
         const userData = (usersData || []).find(function(u) { return u.id === m.user_id; }) || {};
         const stats = statsArr.find(function(s) { return s.user_id === m.user_id; }) || {};
-        return Object.assign({ user_id: m.user_id, name: userData.name || '（名前なし）', department: userData.department || '', role: userData.role || '' }, stats);
+        return Object.assign({
+          user_id: m.user_id,
+          name: userData.name || '（名前なし）',
+          department: userData.department || '',
+          role: userData.role || '',
+          last_sign_in_at: authUsersMap[m.user_id] || null,
+        }, stats);
       });
 
       members.sort(function(a, b) { return b.passed_cases - a.passed_cases; });
