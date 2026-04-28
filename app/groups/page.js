@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '../../lib/auth-context';
-import { supabase } from '../../lib/supabase';
+import { useAuth } from '../lib/auth-context';
+import { supabase } from '../lib/supabase';
 
 function generateInviteCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
