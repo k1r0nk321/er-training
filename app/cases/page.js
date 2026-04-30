@@ -22,6 +22,7 @@ export default function CasesPage() {
   const [selectedDifficulty, setSelectedDifficulty] = useState('all');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [sortOrder, setSortOrder] = useState('newest');
+  const [showBasicOnly, setShowBasicOnly] = useState(false);
 
   // 統計
   const [myResults, setMyResults] = useState({});
@@ -29,7 +30,6 @@ export default function CasesPage() {
   useEffect(() => {
     // お試しモードチェック
     const trial = sessionStorage.getItem('trial_mode') === 'true';
-
     // ログイン済みユーザーはお試しモードフラグを強制クリア
     if (user) {
       sessionStorage.removeItem('trial_mode');
@@ -37,12 +37,10 @@ export default function CasesPage() {
     } else {
       setIsTrialMode(trial);
     }
-
     if (!loading && !user && !trial) {
       router.push('/');
       return;
     }
-
     // お試しモードの場合はuserがnullでも症例を取得する
     if (trial && !user) {
       fetchCases();
@@ -71,7 +69,7 @@ export default function CasesPage() {
 
   useEffect(() => {
     applyFilter();
-  }, [cases, searchText, selectedDifficulty, selectedCategory, sortOrder]);
+  }, [cases, searchText, selectedDifficulty, selectedCategory, sortOrder, showBasicOnly]);
 
   const fetchCases = async () => {
     setLoadingCases(true);
@@ -79,7 +77,6 @@ export default function CasesPage() {
       .from('cases')
       .select('*')
       .order('created_at', { ascending: false });
-
     if (error) {
       setError('症例の読み込みに失敗しました');
       console.error(error);
@@ -95,17 +92,12 @@ export default function CasesPage() {
       .from('results')
       .select('case_id, score, passed, created_at')
       .eq('user_id', user.id);
-
     if (data) {
-      // case_idごとに記録を保持（合格・不合格問わず挑戦済みとしてカウント）
-      // 最高スコアを保持しつつ、挑戦したことは必ず記録
       const resultMap = {};
       data.forEach(r => {
         if (!resultMap[r.case_id]) {
-          // 初回：そのまま登録
           resultMap[r.case_id] = r;
         } else {
-          // 2回目以降：スコアが高い方を保持（ただし挑戦済みフラグは維持）
           if (r.score > resultMap[r.case_id].score) {
             resultMap[r.case_id] = r;
           }
@@ -117,6 +109,11 @@ export default function CasesPage() {
 
   const applyFilter = () => {
     let filtered = [...cases];
+
+    // 救急基本症例集フィルター
+    if (showBasicOnly) {
+      filtered = filtered.filter(c => c.is_basic === true);
+    }
 
     if (searchText) {
       filtered = filtered.filter(c =>
@@ -168,7 +165,6 @@ export default function CasesPage() {
       alert('不合格の症例はありません！');
       return;
     }
-    // 易しい順に優先：easy→medium→hard の順でランダム選択
     const diffOrder = { easy: 1, medium: 2, hard: 3 };
     const minDiff = Math.min(...failed.map(c => diffOrder[c.difficulty] || 2));
     const easiest = failed.filter(c => (diffOrder[c.difficulty] || 2) === minDiff);
@@ -209,7 +205,7 @@ export default function CasesPage() {
 
   // カテゴリ一覧を動的生成
   const categories = ['all', ...new Set(cases.map(c => c.category).filter(Boolean))];
-
+  const basicCount = cases.filter(c => c.is_basic).length;
   const solvedCount = Object.keys(myResults).length;
   const passedCount = Object.values(myResults).filter(r => r.passed).length;
 
@@ -240,7 +236,6 @@ export default function CasesPage() {
       </header>
 
       <div className="max-w-4xl mx-auto px-4 py-6">
-
         {/* 自分の成績サマリー */}
         <div className="bg-white rounded-xl shadow-sm p-4 mb-5 space-y-2">
           <div className="flex items-center justify-between py-2 border-b border-gray-100">
@@ -300,6 +295,31 @@ export default function CasesPage() {
             onChange={e => setSearchText(e.target.value)}
             className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
           />
+
+          {/* 救急基本症例集フィルター */}
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => { setShowBasicOnly(false); setSelectedCategory('all'); }}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
+                !showBasicOnly && selectedCategory === 'all'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white text-gray-600 border border-gray-200'
+              }`}
+            >
+              すべて
+            </button>
+            <button
+              onClick={() => { setShowBasicOnly(true); setSelectedCategory('all'); }}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
+                showBasicOnly
+                  ? 'bg-red-600 text-white'
+                  : 'bg-white text-red-600 border border-red-300'
+              }`}
+            >
+              🚨 救急基本症例集{basicCount > 0 ? `（${basicCount}）` : ''}
+            </button>
+          </div>
+
           <div className="flex gap-2 flex-wrap">
             <select
               value={selectedDifficulty}
@@ -339,6 +359,11 @@ export default function CasesPage() {
                     <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${getDifficultyColor(c.difficulty)}`}>
                       {getDifficultyLabel(c.difficulty)}
                     </span>
+                    {c.is_basic && (
+                      <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-red-100 text-red-700">
+                        🚨 基本
+                      </span>
+                    )}
                     {getScoreBadge(c.id)}
                   </div>
                   <h3 className="font-bold text-gray-800 text-sm leading-snug">{c.title}</h3>
@@ -350,7 +375,6 @@ export default function CasesPage() {
               </div>
             </button>
           ))}
-
           {filteredCases.length === 0 && !loadingCases && (
             <div className="text-center py-12 text-gray-400">
               <p className="text-4xl mb-3">📋</p>
