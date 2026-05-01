@@ -51,7 +51,7 @@ export default function AdminPage() {
   const [newCase, setNewCase] = useState({
     title: '', chief_complaint: '', history: '', vital_signs: '',
     physical_exam: '', initial_labs: '', answer_diagnosis: '',
-    scoring_criteria: '', difficulty: 'medium', category: '',
+    scoring_criteria: '', difficulty: 'medium', category: '', case_number: '',
   });
   const [savingCase, setSavingCase] = useState(false);
 
@@ -199,6 +199,7 @@ export default function AdminPage() {
         difficulty: editCaseData.difficulty || 'medium',
         category: editCaseData.category?.trim() || null,
         is_basic: editCaseData.is_basic === true,
+        case_number: editCaseData.case_number ? parseInt(editCaseData.case_number) : null,
       })
       .eq('id', editingCase.id);
     if (error) {
@@ -235,14 +236,17 @@ export default function AdminPage() {
   const saveCase = async () => {
     if (!newCase.title.trim()) { alert('症例タイトルを入力してください'); return; }
     setSavingCase(true);
+    // 自動採番: 現在の最大番号+1
+    const maxNum = cases.length > 0 ? Math.max(...cases.map(c => c.case_number || 0)) : 0;
+    const nextNum = newCase.case_number ? parseInt(newCase.case_number) : maxNum + 1;
     const { error } = await supabase.from('cases').insert({
-      ...newCase, created_by: user.id, created_at: new Date().toISOString(),
+      ...newCase, case_number: nextNum, created_by: user.id, created_at: new Date().toISOString(),
     });
     if (error) { alert('症例の保存に失敗しました'); }
     else {
       setNewCase({ title: '', chief_complaint: '', history: '', vital_signs: '',
         physical_exam: '', initial_labs: '', answer_diagnosis: '',
-        scoring_criteria: '', difficulty: 'medium', category: '' });
+        scoring_criteria: '', difficulty: 'medium', category: '', case_number: '' });
       setShowCaseForm(false); fetchAll(); alert('症例を追加しました');
     }
     setSavingCase(false);
@@ -488,6 +492,19 @@ export default function AdminPage() {
                       )}
                     </div>
                   ))}
+                  {/* 問題番号 */}
+                  <div>
+                    <label className="text-xs font-bold text-gray-600 mb-1 block">問題番号</label>
+                    <input
+                      type="number"
+                      value={editCaseData.case_number || ''}
+                      onChange={e => setEditCaseData(prev => ({ ...prev, case_number: e.target.value }))}
+                      placeholder="例：1, 2, 3..."
+                      min="1"
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    />
+                    <p className="text-xs text-gray-400 mt-0.5">症例一覧での表示番号（#001形式）</p>
+                  </div>
                   {/* 難易度 */}
                   <div>
                     <label className="text-xs font-bold text-gray-600 mb-1 block">難易度</label>
@@ -579,6 +596,17 @@ export default function AdminPage() {
                   </div>
                 ))}
                 <div>
+                  <label className="text-xs font-bold text-gray-600 mb-1 block">問題番号（空欄で自動採番）</label>
+                  <input
+                    type="number"
+                    value={newCase.case_number}
+                    onChange={e => setNewCase({ ...newCase, case_number: e.target.value })}
+                    placeholder="空欄の場合は自動で最大番号+1"
+                    min="1"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-300"
+                  />
+                </div>
+                <div>
                   <label className="text-xs font-bold text-gray-600 mb-1 block">難易度</label>
                   <select value={newCase.difficulty} onChange={e => setNewCase({ ...newCase, difficulty: e.target.value })}
                     className="border border-gray-200 rounded-lg px-3 py-2 text-sm">
@@ -609,6 +637,7 @@ export default function AdminPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-mono font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded flex-shrink-0">#{String(c.case_number || '—').padStart(3, '0')}</span>
                           <h3 className="font-bold text-gray-800 text-sm">{c.title}</h3>
                           {c.is_basic && <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-red-100 text-red-700">🚨 基本</span>}
                         </div>
