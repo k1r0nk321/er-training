@@ -9,7 +9,6 @@ export default function CasesPage() {
   const { user, userProfile, loading } = useAuth();
   const router = useRouter();
 
-  // お試しモード判定
   const [isTrialMode, setIsTrialMode] = useState(false);
 
   const [cases, setCases] = useState([]);
@@ -17,20 +16,16 @@ export default function CasesPage() {
   const [loadingCases, setLoadingCases] = useState(true);
   const [error, setError] = useState('');
 
-  // フィルター状態
   const [searchText, setSearchText] = useState('');
   const [selectedDifficulty, setSelectedDifficulty] = useState('all');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [sortOrder, setSortOrder] = useState('newest');
+  const [sortOrder, setSortOrder] = useState('number');
   const [showBasicOnly, setShowBasicOnly] = useState(false);
 
-  // 統計
   const [myResults, setMyResults] = useState({});
 
   useEffect(() => {
-    // お試しモードチェック
     const trial = sessionStorage.getItem('trial_mode') === 'true';
-    // ログイン済みユーザーはお試しモードフラグを強制クリア
     if (user) {
       sessionStorage.removeItem('trial_mode');
       setIsTrialMode(false);
@@ -41,7 +36,6 @@ export default function CasesPage() {
       router.push('/');
       return;
     }
-    // お試しモードの場合はuserがnullでも症例を取得する
     if (trial && !user) {
       fetchCases();
     }
@@ -49,14 +43,12 @@ export default function CasesPage() {
 
   useEffect(() => {
     const trial = sessionStorage.getItem('trial_mode') === 'true';
-    // ログイン済みユーザーの場合：症例取得＋成績取得
     if (user && !trial) {
       fetchCases();
       fetchMyResults();
     }
   }, [user]);
 
-  // ページに戻ったとき（症例詳細から戻るなど）に成績を再取得
   useEffect(() => {
     const handleVisibility = () => {
       if (document.visibilityState === 'visible' && user) {
@@ -76,10 +68,9 @@ export default function CasesPage() {
     const { data, error } = await supabase
       .from('cases')
       .select('*')
-      .order('created_at', { ascending: false });
+      .order('case_number', { ascending: true });
     if (error) {
       setError('症例の読み込みに失敗しました');
-      console.error(error);
     } else {
       setCases(data || []);
     }
@@ -110,16 +101,16 @@ export default function CasesPage() {
   const applyFilter = () => {
     let filtered = [...cases];
 
-    // 救急基本症例集フィルター
     if (showBasicOnly) {
       filtered = filtered.filter(c => c.is_basic === true);
     }
 
     if (searchText) {
       filtered = filtered.filter(c =>
-        c.title.includes(searchText) ||
+        c.title?.includes(searchText) ||
         c.chief_complaint?.includes(searchText) ||
-        c.category?.includes(searchText)
+        c.category?.includes(searchText) ||
+        String(c.case_number).includes(searchText)
       );
     }
 
@@ -131,7 +122,9 @@ export default function CasesPage() {
       filtered = filtered.filter(c => c.category === selectedCategory);
     }
 
-    if (sortOrder === 'newest') {
+    if (sortOrder === 'number') {
+      filtered.sort((a, b) => (a.case_number || 9999) - (b.case_number || 9999));
+    } else if (sortOrder === 'newest') {
       filtered.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     } else if (sortOrder === 'difficulty_asc') {
       const order = { easy: 1, medium: 2, hard: 3 };
@@ -141,6 +134,11 @@ export default function CasesPage() {
     }
 
     setFilteredCases(filtered);
+  };
+
+  const formatNumber = (n) => {
+    if (!n) return '—';
+    return '#' + String(n).padStart(3, '0');
   };
 
   const handleRandomSelect = () => {
@@ -172,19 +170,12 @@ export default function CasesPage() {
     router.push(`/cases/${randomCase.id}`);
   };
 
-  const getDifficultyLabel = (d) => {
-    const labels = { easy: '易', medium: '中', hard: '難' };
-    return labels[d] || '中';
-  };
-
-  const getDifficultyColor = (d) => {
-    const colors = {
-      easy: 'bg-green-100 text-green-700',
-      medium: 'bg-yellow-100 text-yellow-700',
-      hard: 'bg-red-100 text-red-700',
-    };
-    return colors[d] || 'bg-gray-100 text-gray-600';
-  };
+  const getDifficultyLabel = (d) => ({ easy: '易', medium: '中', hard: '難' }[d] || '中');
+  const getDifficultyColor = (d) => ({
+    easy: 'bg-green-100 text-green-700',
+    medium: 'bg-yellow-100 text-yellow-700',
+    hard: 'bg-red-100 text-red-700',
+  }[d] || 'bg-gray-100 text-gray-600');
 
   const getScoreBadge = (caseId) => {
     const result = myResults[caseId];
@@ -203,8 +194,6 @@ export default function CasesPage() {
     );
   };
 
-  // カテゴリ一覧を動的生成
-  const categories = ['all', ...new Set(cases.map(c => c.category).filter(Boolean))];
   const basicCount = cases.filter(c => c.is_basic).length;
   const solvedCount = Object.keys(myResults).length;
   const passedCount = Object.values(myResults).filter(r => r.passed).length;
@@ -222,7 +211,6 @@ export default function CasesPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* ヘッダー */}
       <header className="bg-white shadow-sm sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
           <button onClick={() => router.push('/')} className="text-blue-600 hover:text-blue-800 flex items-center gap-1 text-sm">
@@ -236,7 +224,7 @@ export default function CasesPage() {
       </header>
 
       <div className="max-w-4xl mx-auto px-4 py-6">
-        {/* 自分の成績サマリー */}
+        {/* 成績サマリー */}
         <div className="bg-white rounded-xl shadow-sm p-4 mb-5 space-y-2">
           <div className="flex items-center justify-between py-2 border-b border-gray-100">
             <span className="text-sm text-gray-600">総症例数</span>
@@ -263,25 +251,16 @@ export default function CasesPage() {
 
         {/* ランダム選択ボタン */}
         <div className="grid grid-cols-2 gap-3 mb-5">
-          <button
-            onClick={handleRandomSelect}
-            disabled={filteredCases.length === 0}
-            className="bg-blue-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-blue-700 active:bg-blue-800 disabled:opacity-40 transition"
-          >
+          <button onClick={handleRandomSelect} disabled={filteredCases.length === 0}
+            className="bg-blue-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-blue-700 disabled:opacity-40 transition">
             🎲 ランダムに挑戦
           </button>
-          <button
-            onClick={handleRandomUnsolved}
-            disabled={filteredCases.length === 0 || isTrialMode}
-            className="bg-indigo-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-40 transition"
-          >
+          <button onClick={handleRandomUnsolved} disabled={filteredCases.length === 0 || isTrialMode}
+            className="bg-indigo-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-indigo-700 disabled:opacity-40 transition">
             🌟 未解答からランダム
           </button>
-          <button
-            onClick={handleRandomFailed}
-            disabled={filteredCases.length === 0 || isTrialMode}
-            className="col-span-2 bg-orange-500 text-white py-3 rounded-xl font-bold text-sm hover:bg-orange-600 active:bg-orange-700 disabled:opacity-40 transition"
-          >
+          <button onClick={handleRandomFailed} disabled={filteredCases.length === 0 || isTrialMode}
+            className="col-span-2 bg-orange-500 text-white py-3 rounded-xl font-bold text-sm hover:bg-orange-600 disabled:opacity-40 transition">
             🔁 不合格からランダム
           </button>
         </div>
@@ -290,13 +269,11 @@ export default function CasesPage() {
         <div className="bg-white rounded-xl shadow-sm p-4 mb-4 space-y-3">
           <input
             type="text"
-            placeholder="症例名・主訴・カテゴリで検索..."
+            placeholder="症例名・主訴・番号で検索..."
             value={searchText}
             onChange={e => setSearchText(e.target.value)}
             className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
           />
-
-          {/* 救急基本症例集フィルター */}
           <div className="flex gap-2 flex-wrap">
             <button
               onClick={() => { setShowBasicOnly(false); setSelectedCategory('all'); }}
@@ -319,23 +296,17 @@ export default function CasesPage() {
               🚨 救急基本症例集{basicCount > 0 ? `（${basicCount}）` : ''}
             </button>
           </div>
-
           <div className="flex gap-2 flex-wrap">
-            <select
-              value={selectedDifficulty}
-              onChange={e => setSelectedDifficulty(e.target.value)}
-              className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-            >
+            <select value={selectedDifficulty} onChange={e => setSelectedDifficulty(e.target.value)}
+              className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
               <option value="all">難易度：すべて</option>
               <option value="easy">易しい</option>
               <option value="medium">普通</option>
               <option value="hard">難しい</option>
             </select>
-            <select
-              value={sortOrder}
-              onChange={e => setSortOrder(e.target.value)}
-              className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-            >
+            <select value={sortOrder} onChange={e => setSortOrder(e.target.value)}
+              className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
+              <option value="number">番号順</option>
               <option value="newest">新しい順</option>
               <option value="difficulty_asc">難易度順</option>
               <option value="title">タイトル順</option>
@@ -356,6 +327,10 @@ export default function CasesPage() {
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    {/* 問題番号バッジ */}
+                    <span className="text-xs font-mono font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded">
+                      {formatNumber(c.case_number)}
+                    </span>
                     <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${getDifficultyColor(c.difficulty)}`}>
                       {getDifficultyLabel(c.difficulty)}
                     </span>
