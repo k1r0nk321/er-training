@@ -1,12 +1,11 @@
 'use client';
-
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from './lib/auth-context';
 import { supabase } from './lib/supabase';
+import { ER_HERO_IMAGE } from './er-hero-image';
 
 const ADMIN_EMAIL = 'nakamae@mub.biglobe.ne.jp';
-
 const ROLE_OPTIONS = [
   { value: '医学生', label: '医学生' },
   { value: '初期研修医1年', label: '初期研修医（1年目）' },
@@ -54,13 +53,14 @@ const TERMS_TEXT = `【ER Training 利用規約】
 export default function HomePage() {
   const { user, userProfile, isNewUser, signIn, signOut, registerProfile, loading } = useAuth();
   const router = useRouter();
-
   const [mode, setMode] = useState('login');
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   const [showLoginPw, setShowLoginPw] = useState(false);
+
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [signupPasswordConfirm, setSignupPasswordConfirm] = useState('');
@@ -69,6 +69,7 @@ export default function HomePage() {
   const [signupDone, setSignupDone] = useState(false);
   const [showSignupPw, setShowSignupPw] = useState(false);
   const [showSignupPwConfirm, setShowSignupPwConfirm] = useState(false);
+
   const [trialPassword, setTrialPassword] = useState('');
   const [trialError, setTrialError] = useState('');
   const [trialPw, setTrialPw] = useState('');
@@ -98,7 +99,6 @@ export default function HomePage() {
   const [deleteInput, setDeleteInput] = useState('');
 
   const [announcements, setAnnouncements] = useState([]);
-
   const [appUpdates, setAppUpdates] = useState([]);
 
   useEffect(() => {
@@ -153,6 +153,7 @@ export default function HomePage() {
     if (!signupEmail.trim()) { setSignupError('メールアドレスを入力してください'); return; }
     if (signupPassword.length < 8) { setSignupError('パスワードは8文字以上で設定してください'); return; }
     if (signupPassword !== signupPasswordConfirm) { setSignupError('パスワードが一致しません'); return; }
+
     setSignupLoading(true);
     const { error } = await supabase.auth.signUp({ email: signupEmail.trim(), password: signupPassword });
     if (error) {
@@ -179,10 +180,13 @@ export default function HomePage() {
     if (!regName.trim()) { setRegError('お名前を入力してください'); return; }
     if (!regRole) { setRegError('身分を選択してください'); return; }
     if (!termsAgreed) { setRegError('利用規約に同意してください'); return; }
+
     setRegLoading(true);
     setRegError('');
+
     // registerProfileで基本情報を登録後、departmentを更新
     const { error } = await registerProfile(regName.trim(), regRole);
+
     if (error) {
       setRegError('登録に失敗しました。もう一度お試しください。');
     } else if (regDepartment.trim()) {
@@ -192,6 +196,7 @@ export default function HomePage() {
         .update({ department: regDepartment.trim() })
         .eq('id', user.id);
     }
+
     setRegLoading(false);
   };
 
@@ -199,9 +204,11 @@ export default function HomePage() {
     e?.preventDefault();
     if (!editName.trim()) { setEditError('お名前を入力してください'); return; }
     if (!editRole) { setEditError('身分を選択してください'); return; }
+
     setEditLoading(true);
     setEditError('');
     setEditSuccess(false);
+
     const { error } = await supabase
       .from('users')
       .update({
@@ -210,6 +217,7 @@ export default function HomePage() {
         department: editDepartment.trim() || null,
       })
       .eq('id', user.id);
+
     if (error) {
       setEditError('更新に失敗しました。もう一度お試しください。');
     } else {
@@ -261,7 +269,11 @@ export default function HomePage() {
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col">
         <div className="max-w-md mx-auto w-full px-4 py-10 space-y-5 flex-1">
           <div className="text-center py-4">
-            <div className="text-5xl mb-3">🏥</div>
+            <img
+              src={ER_HERO_IMAGE}
+              alt="ER Training"
+              className="w-32 h-32 rounded-full object-cover shadow-lg ring-4 ring-white mx-auto mb-3"
+            />
             <h1 className="text-2xl font-black text-gray-900">ER Training</h1>
             <p className="text-gray-500 mt-1">プロフィール設定（初回のみ）</p>
           </div>
@@ -330,7 +342,6 @@ export default function HomePage() {
                     {showTerms ? '閉じる ▲' : '規約を確認する ▼'}
                   </button>
                 </div>
-
                 {showTerms && (
                   <div className="bg-gray-50 rounded-xl p-4 max-h-48 overflow-y-auto border border-gray-200">
                     <pre className="text-xs text-gray-600 whitespace-pre-wrap font-sans leading-relaxed">
@@ -338,7 +349,6 @@ export default function HomePage() {
                     </pre>
                   </div>
                 )}
-
                 <label className="flex items-start gap-3 cursor-pointer">
                   <input
                     type="checkbox"
@@ -380,7 +390,11 @@ export default function HomePage() {
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
         <div className="max-w-md mx-auto px-4 py-8 space-y-5">
           <div className="text-center py-4">
-            <div className="text-4xl mb-2">🏥</div>
+            <img
+              src={ER_HERO_IMAGE}
+              alt="ER Training"
+              className="w-24 h-24 rounded-full object-cover shadow-md ring-4 ring-white mx-auto mb-2"
+            />
             <h1 className="text-2xl font-black text-gray-900">ER Training</h1>
           </div>
 
@@ -546,7 +560,7 @@ export default function HomePage() {
               <div className="font-bold text-base">成績一覧</div>
               <div className="text-xs text-indigo-200 mt-0.5">過去の記録</div>
             </button>
-<button
+            <button
               onClick={() => router.push('/groups')}
               className="col-span-2 bg-teal-600 text-white rounded-2xl p-5 text-left hover:bg-teal-700 transition shadow-sm"
             >
@@ -557,7 +571,7 @@ export default function HomePage() {
           </div>
 
           {/* アップデート情報 */}
-<button onClick={() => router.push('/updates')}
+          <button onClick={() => router.push('/updates')}
             className="w-full bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl p-4 text-left hover:bg-emerald-100 transition flex items-center gap-3"
           >
             <span className="text-2xl flex-shrink-0">🆕</span>
@@ -629,9 +643,12 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col">
       <div className="max-w-md mx-auto w-full px-4 py-10 space-y-6 flex-1">
-
         <div className="text-center py-4">
-          <div className="text-5xl mb-3">🏥</div>
+          <img
+            src={ER_HERO_IMAGE}
+            alt="ER Training"
+            className="w-40 h-40 rounded-full object-cover shadow-lg ring-4 ring-white mx-auto mb-3"
+          />
           <h1 className="text-3xl font-black text-gray-900">ER Training</h1>
         </div>
 
@@ -803,7 +820,6 @@ export default function HomePage() {
             ))}
           </div>
         )}
-
       </div>
     </div>
   );
