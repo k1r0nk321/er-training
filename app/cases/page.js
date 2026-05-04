@@ -151,6 +151,41 @@ export default function CasesPage() {
     setFilteredCases(filtered);
   };
 
+  // ===== カウント計算（フィルター条件を考慮した母数） =====
+
+  // 現在の「カテゴリ+難易度」フィルターを適用した母数リスト（回答状況フィルターは除く）
+  const baseFilteredCases = cases.filter(c => {
+    if (showBasicOnly && !c.is_basic) return false;
+    if (selectedDifficulty !== 'all' && c.difficulty !== selectedDifficulty) return false;
+    if (selectedCategory !== 'all' && c.category !== selectedCategory) return false;
+    if (searchText && !(
+      c.title?.includes(searchText) ||
+      c.chief_complaint?.includes(searchText) ||
+      c.category?.includes(searchText) ||
+      String(c.case_number).includes(searchText)
+    )) return false;
+    return true;
+  });
+
+  const baseTotal = baseFilteredCases.length;
+  const baseUnsolved = baseFilteredCases.filter(c => !myResults[c.id]).length;
+  const baseFailed = baseFilteredCases.filter(c => myResults[c.id] && !myResults[c.id].passed).length;
+  const basePassed = baseFilteredCases.filter(c => myResults[c.id] && myResults[c.id].passed).length;
+
+  // 全体の統計（サマリー用）
+  const totalAll = cases.length;
+  const passedAll = Object.values(myResults).filter(r => r.passed).length;
+  const failedAll = Object.values(myResults).filter(r => !r.passed).length;
+  const unsolvedAll = cases.length - Object.keys(myResults).length;
+  const basicCount = cases.filter(c => c.is_basic).length;
+
+  // 難易度ラベル（ボタン表示用）
+  const difficultyLabel = {
+    easy: '易しい',
+    medium: '普通',
+    hard: '難しい',
+  };
+
   const formatNumber = (n) => {
     if (!n) return '—';
     return '#' + String(n).padStart(3, '0');
@@ -209,11 +244,13 @@ export default function CasesPage() {
     );
   };
 
-  const basicCount = cases.filter(c => c.is_basic).length;
-  const solvedCount = Object.keys(myResults).length;
-  const passedCount = Object.values(myResults).filter(r => r.passed).length;
-  const failedCount = Object.values(myResults).filter(r => !r.passed).length;
-  const unsolvedCount = cases.length - solvedCount;
+  // フィルターが適用されているかどうか
+  const isFiltered = showBasicOnly || selectedDifficulty !== 'all' || searchText;
+  // フィルターラベル（サマリーに表示）
+  const filterLabel = [
+    showBasicOnly ? '救急基本症例' : null,
+    selectedDifficulty !== 'all' ? difficultyLabel[selectedDifficulty] : null,
+  ].filter(Boolean).join(' · ');
 
   if (loading || loadingCases) {
     return (
@@ -236,7 +273,7 @@ export default function CasesPage() {
           </button>
           <h1 className="text-lg font-bold text-gray-800">症例一覧</h1>
           <div className="text-sm text-gray-500">
-            {isTrialMode ? 'お試しモード' : `${solvedCount} / ${cases.length}問`}
+            {isTrialMode ? 'お試しモード' : `${Object.keys(myResults).length} / ${totalAll}問`}
           </div>
         </div>
       </header>
@@ -245,24 +282,50 @@ export default function CasesPage() {
         {/* 成績サマリー */}
         {!isTrialMode && (
           <div className="bg-white rounded-xl shadow-sm p-4 mb-5">
-            <div className="grid grid-cols-4 gap-2 text-center">
-              <div className="py-2">
-                <p className="text-lg font-black text-blue-600">{cases.length}</p>
-                <p className="text-xs text-gray-400">総症例数</p>
+            {/* フィルター適用中はフィルター後の数を表示 */}
+            {isFiltered ? (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-bold text-blue-600">
+                    🔍 {filterLabel}（{baseTotal}件）
+                  </p>
+                  <p className="text-xs text-gray-400">全体: {totalAll}問</p>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="py-2 bg-green-50 rounded-lg">
+                    <p className="text-lg font-black text-green-600">{basePassed}</p>
+                    <p className="text-xs text-gray-500">合格</p>
+                  </div>
+                  <div className="py-2 bg-orange-50 rounded-lg">
+                    <p className="text-lg font-black text-orange-500">{baseFailed}</p>
+                    <p className="text-xs text-gray-500">不合格</p>
+                  </div>
+                  <div className="py-2 bg-gray-50 rounded-lg">
+                    <p className="text-lg font-black text-gray-400">{baseUnsolved}</p>
+                    <p className="text-xs text-gray-500">未回答</p>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="grid grid-cols-4 gap-2 text-center">
+                <div className="py-2">
+                  <p className="text-lg font-black text-blue-600">{totalAll}</p>
+                  <p className="text-xs text-gray-400">総症例数</p>
+                </div>
+                <div className="py-2 border-l border-gray-100">
+                  <p className="text-lg font-black text-green-600">{passedAll}</p>
+                  <p className="text-xs text-gray-400">合格</p>
+                </div>
+                <div className="py-2 border-l border-gray-100">
+                  <p className="text-lg font-black text-orange-500">{failedAll}</p>
+                  <p className="text-xs text-gray-400">不合格</p>
+                </div>
+                <div className="py-2 border-l border-gray-100">
+                  <p className="text-lg font-black text-gray-400">{unsolvedAll}</p>
+                  <p className="text-xs text-gray-400">未回答</p>
+                </div>
               </div>
-              <div className="py-2 border-l border-gray-100">
-                <p className="text-lg font-black text-green-600">{passedCount}</p>
-                <p className="text-xs text-gray-400">合格</p>
-              </div>
-              <div className="py-2 border-l border-gray-100">
-                <p className="text-lg font-black text-orange-500">{failedCount}</p>
-                <p className="text-xs text-gray-400">不合格</p>
-              </div>
-              <div className="py-2 border-l border-gray-100">
-                <p className="text-lg font-black text-gray-400">{unsolvedCount}</p>
-                <p className="text-xs text-gray-400">未回答</p>
-              </div>
-            </div>
+            )}
           </div>
         )}
 
@@ -294,7 +357,7 @@ export default function CasesPage() {
             className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
           />
 
-          {/* 救急基本症例集 */}
+          {/* カテゴリ（救急基本症例集） */}
           <div>
             <p className="text-xs text-gray-400 font-medium mb-1.5">カテゴリ</p>
             <div className="flex gap-2 flex-wrap">
@@ -306,7 +369,7 @@ export default function CasesPage() {
                     : 'bg-white text-gray-600 border border-gray-200'
                 }`}
               >
-                すべて
+                すべて（{totalAll}）
               </button>
               <button
                 onClick={() => { setShowBasicOnly(true); setSelectedCategory('all'); }}
@@ -316,8 +379,47 @@ export default function CasesPage() {
                     : 'bg-white text-red-600 border border-red-300'
                 }`}
               >
-                🚨 救急基本症例集{basicCount > 0 ? `（${basicCount}）` : ''}
+                🚨 救急基本症例集（{basicCount}）
               </button>
+            </div>
+          </div>
+
+          {/* 難易度フィルター */}
+          <div>
+            <p className="text-xs text-gray-400 font-medium mb-1.5">難易度</p>
+            <div className="flex gap-2 flex-wrap">
+              {[
+                { value: 'all', label: 'すべて' },
+                { value: 'easy', label: '易しい' },
+                { value: 'medium', label: '普通' },
+                { value: 'hard', label: '難しい' },
+              ].map(opt => {
+                // 各難易度での件数を計算（基本症例フィルターは考慮）
+                const count = cases.filter(c => {
+                  if (showBasicOnly && !c.is_basic) return false;
+                  if (opt.value !== 'all' && c.difficulty !== opt.value) return false;
+                  return true;
+                }).length;
+                return (
+                  <button
+                    key={opt.value}
+                    onClick={() => setSelectedDifficulty(opt.value)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
+                      selectedDifficulty === opt.value
+                        ? opt.value === 'easy' ? 'bg-green-600 text-white'
+                          : opt.value === 'medium' ? 'bg-yellow-500 text-white'
+                          : opt.value === 'hard' ? 'bg-red-600 text-white'
+                          : 'bg-gray-700 text-white'
+                        : opt.value === 'easy' ? 'bg-white text-green-700 border border-green-300'
+                          : opt.value === 'medium' ? 'bg-white text-yellow-700 border border-yellow-300'
+                          : opt.value === 'hard' ? 'bg-white text-red-700 border border-red-300'
+                          : 'bg-white text-gray-600 border border-gray-200'
+                    }`}
+                  >
+                    {opt.label}（{count}）
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -334,7 +436,7 @@ export default function CasesPage() {
                       : 'bg-white text-gray-600 border border-gray-200'
                   }`}
                 >
-                  すべて
+                  すべて（{baseTotal}）
                 </button>
                 <button
                   onClick={() => setResultFilter('unsolved')}
@@ -344,7 +446,7 @@ export default function CasesPage() {
                       : 'bg-white text-gray-500 border border-gray-300'
                   }`}
                 >
-                  未回答（{unsolvedCount}）
+                  未回答（{baseUnsolved}）
                 </button>
                 <button
                   onClick={() => setResultFilter('failed')}
@@ -354,34 +456,31 @@ export default function CasesPage() {
                       : 'bg-white text-orange-500 border border-orange-300'
                   }`}
                 >
-                  不合格（{failedCount}）
+                  不合格（{baseFailed}）
                 </button>
               </div>
+              {/* フィルター説明 */}
+              {isFiltered && (
+                <p className="text-xs text-blue-500 mt-1">
+                  ※ {filterLabel}（{baseTotal}件）を母数としたカウントです
+                </p>
+              )}
             </div>
           )}
 
-          {/* 難易度・ソート */}
+          {/* ソート */}
           <div>
-            <p className="text-xs text-gray-400 font-medium mb-1.5">難易度・並び順</p>
-            <div className="flex gap-2 flex-wrap">
-              <select value={selectedDifficulty} onChange={e => setSelectedDifficulty(e.target.value)}
-                className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
-                <option value="all">難易度：すべて</option>
-                <option value="easy">易しい</option>
-                <option value="medium">普通</option>
-                <option value="hard">難しい</option>
-              </select>
-              <select value={sortOrder} onChange={e => setSortOrder(e.target.value)}
-                className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
-                <option value="number">番号順</option>
-                <option value="newest">新しい順</option>
-                <option value="difficulty_asc">難易度順</option>
-                <option value="title">タイトル順</option>
-              </select>
-            </div>
+            <p className="text-xs text-gray-400 font-medium mb-1.5">並び順</p>
+            <select value={sortOrder} onChange={e => setSortOrder(e.target.value)}
+              className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
+              <option value="number">番号順</option>
+              <option value="newest">新しい順</option>
+              <option value="difficulty_asc">難易度順</option>
+              <option value="title">タイトル順</option>
+            </select>
           </div>
 
-          {/* 件数表示 + フィルタークリアボタン */}
+          {/* 件数表示 + フィルタークリア */}
           <div className="flex items-center justify-between pt-1">
             <p className="text-xs text-gray-400">{filteredCases.length}件表示</p>
             {(showBasicOnly || resultFilter !== 'all' || selectedDifficulty !== 'all' || searchText) && (
