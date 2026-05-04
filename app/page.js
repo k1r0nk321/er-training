@@ -577,7 +577,7 @@ export default function HomePage() {
             <span className="text-2xl flex-shrink-0">🆕</span>
             <div className="flex-1 min-w-0">
               <div className="font-bold text-sm">アップデート情報</div>
-              <div className="text-xs text-emerald-600 mt-0.5">最新の機能改善・追加情報（過去5日分）</div>
+              <div className="text-xs text-emerald-600 mt-0.5">最新の機能改善・追加情報</div>
             </div>
             <span className="text-emerald-400 text-sm flex-shrink-0">→</span>
           </button>
