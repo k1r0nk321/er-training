@@ -239,7 +239,8 @@ ${conversationHistory}
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt }),
-      });
+  setExamLoading(true);
+        setOtherExamResult('');});
       const data = await response.json();
       setInterviewCoaching(data.text || data.content || '');
     } catch {
@@ -262,7 +263,7 @@ ${conversationHistory}
     const examsToRun = [...selectedExamLabels];
     if (otherExam.trim()) examsToRun.push(`その他：${otherExam}`);
 
-    if (examsToRun.length === 0) { alert('検査を1つ以上選択してください'); return; }
+    if (examsToRun.length === 0) { alert('検査を1つ以上選択してください'); return; }    // 既に結果が取得済みの検査を除外（新規追加分のみAIに問い合わせる）    const newExamsToRun = examsToRun.filter(e => !examResults[e]);    if (newExamsToRun.length === 0) { setExamDone(true); return; }    // 既に結果が取得済みの検査を除外（新規追加分のみAI
 
     setExamLoading(true);
     setExamResults({});
@@ -326,7 +327,7 @@ ${examsToRun.map((e, i) => `${i + 1}. ${e}`).join('\n')}
         const firstExam = examsToRun[0] || '検査結果';
         parsed = { results: { [firstExam]: raw.substring(0, 500) } };
       }
-      setExamResults(parsed.results || {});
+      setExamResults(prev => ({ ...prev, ...(parsed.results || {}) }));
       setExamDone(true);
 
       // ===== 採点用スナップショットを保存（この時点の情報が本人の実力） =====
