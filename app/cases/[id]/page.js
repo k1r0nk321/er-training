@@ -130,7 +130,7 @@ export default function CaseDetailPage() {
     if (chatContainer) {
       const items = chatContainer.querySelectorAll('[data-msg]');
       const targetIdx = items.length >= 2 ? items.length - 2 : 0;
-      items[targetIdx]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      chatContainer.scrollTop = chatContainer.scrollHeight;
     }
   } else {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
