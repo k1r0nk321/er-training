@@ -1,13 +1,10 @@
 'use client';
-
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '../../lib/auth-context';
 import { supabase } from '../../lib/supabase';
-
 // フェーズ定義
 // 'info' → 'interview'（問診＋鑑別診断） → 'workup' → 'diagnosis' → 'result'
-
 // 検査リスト定義
 const EXAM_LIST = [
   { id: 'blood_gas', label: '血液ガス', category: '血液' },
@@ -25,9 +22,7 @@ const EXAM_LIST = [
   { id: 'ct_abdomen_contrast', label: '腹部造影CT', category: 'CT' },
   { id: 'mri_head', label: '頭部MRI', category: 'MRI' },
 ];
-
 const EXAM_CATEGORIES = ['血液', '生理', '画像', 'CT', 'MRI'];
-
 // ===== アコーディオンコンポーネント =====
 function InfoAccordion({ title, children, defaultOpen = false }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -48,18 +43,15 @@ function InfoAccordion({ title, children, defaultOpen = false }) {
     </div>
   );
 }
-
 export default function CaseDetailPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const params = useParams();
   const caseId = params.id;
-
   const [caseData, setCaseData] = useState(null);
   const [loadingCase, setLoadingCase] = useState(true);
   const [error, setError] = useState('');
   const [phase, setPhase] = useState('info');
-
   // ===== 問診チャット =====
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
@@ -68,75 +60,58 @@ export default function CaseDetailPage() {
   const [showCoaching, setShowCoaching] = useState(false);
   const [coachingLoading, setCoachingLoading] = useState(false);
   const chatBottomRef = useRef(null);
-
   // ===== Step3指導医コメント =====
   const [workupCoaching, setWorkupCoaching] = useState('');
   const [workupCoachingLoading, setWorkupCoachingLoading] = useState(false);
   const [showWorkupCoaching, setShowWorkupCoaching] = useState(false);
-
   // ===== 採点用スナップショット（指導コメント取得前の情報を保存） =====
-  const [scoreSnapshot, setScoreSnapshot] = useState(null); // {differentials, messages, examResults, examLabels}
-
+  const [scoreSnapshot, setScoreSnapshot] = useState(null);
   // ===== 鑑別診断 =====
   const [differentials, setDifferentials] = useState(['', '', '', '', '']);
   const [aiAnalysis, setAiAnalysis] = useState('');
   const [analysisDone, setAnalysisDone] = useState(false);
-
-  // ===== 精査計画（新） =====
+  // ===== 精査計画 =====
   const [selectedExams, setSelectedExams] = useState({});
   const [otherExam, setOtherExam] = useState('');
-  const [examResults, setExamResults] = useState({}); // 検査結果
+  const [examResults, setExamResults] = useState({});
   const [examLoading, setExamLoading] = useState(false);
   const [examDone, setExamDone] = useState(false);
   const [otherExamResult, setOtherExamResult] = useState('');
-
   // ===== 最終診断 =====
   const [finalDiagnosis, setFinalDiagnosis] = useState('');
-
   // ===== 採点 =====
   const [scoreResult, setScoreResult] = useState(null);
   const [scoringLoading, setScoringLoading] = useState(false);
-
   // ===== 前回成績 =====
   const [prevResults, setPrevResults] = useState([]);
-
   useEffect(() => {
     const trial = sessionStorage.getItem('trial_mode') === 'true';
-    // ログイン済みユーザーはお試しモードフラグを強制クリア
     if (user) sessionStorage.removeItem('trial_mode');
     if (!loading && !user && !trial) router.push('/');
   }, [user, loading, router]);
-
   useEffect(() => {
     const trial = sessionStorage.getItem('trial_mode') === 'true';
-    // ログイン済みユーザー
     if (user && caseId) {
       fetchCase();
       fetchPrevResults();
     }
-    // お試しモード（userがnullでも症例取得）
     if (!user && trial && caseId) {
       fetchCase();
     }
   }, [user, caseId]);
-
   useEffect(() => {
-  if (messages.length === 0) return;
-  const lastMsg = messages[messages.length - 1];
-  if (lastMsg.role === 'patient') {
-    // AI（患者）の返答が来たとき→返答の直前（研修医の発言）位置にスクロール
-    // チャット欄コンテナを取得して、最後から2番目の要素を表示
-    const chatContainer = chatBottomRef.current?.parentElement;
-    if (chatContainer) {
-      const items = chatContainer.querySelectorAll('[data-msg]');
-      const targetIdx = items.length >= 2 ? items.length - 2 : 0;
-      chatContainer.scrollTop = chatContainer.scrollHeight;
+    if (messages.length === 0) return;
+    const last = messages[messages.length - 1];
+    if (last.role === 'patient') {
+      // AI返答時：チャット欄を最下部にスクロール（入力欄が見えるように）
+      const chatContainer = chatBottomRef.current?.parentElement;
+      if (chatContainer) {
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+      }
+    } else {
+      chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  } else {
-    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }
-}, [messages]);
-
+  }, [messages]);
   const fetchCase = async () => {
     setLoadingCase(true);
     const { data, error } = await supabase
@@ -148,7 +123,6 @@ export default function CaseDetailPage() {
     else setCaseData(data);
     setLoadingCase(false);
   };
-
   const fetchPrevResults = async () => {
     if (!user) return;
     const { data } = await supabase
@@ -160,7 +134,6 @@ export default function CaseDetailPage() {
       .limit(3);
     if (data) setPrevResults(data);
   };
-
   // ===== 問診送信 =====
   const handleSendMessage = async () => {
     if (!inputText.trim() || chatLoading) return;
@@ -169,20 +142,16 @@ export default function CaseDetailPage() {
     const newMessages = [...messages, { role: 'resident', text: userMsg }];
     setMessages(newMessages);
     setChatLoading(true);
-
     const conversationHistory = newMessages.map(m =>
       `${m.role === 'resident' ? '研修医' : '患者/家族'}：${m.text}`
     ).join('\n');
-
     const prompt = `あなたは救急ERに搬送された患者（または家族）の役を演じています。
-
 【症例情報（演じる際の根拠。研修医には見せない）】
 症例タイトル：${caseData.title}
 主訴：${caseData.chief_complaint || ''}
 現病歴：${caseData.history || ''}
 正解の診断：${caseData.answer_diagnosis || ''}
 身体所見（診察された場合のみ答える）：${caseData.physical_exam || ''}
-
 【ルール】
 - 患者または家族として自然に返答（医学用語は使わず一般的な言葉で）。ただし、身体所見については、患者又は家族の返答ではなく、医師がとる医学所見情報を回答する。
 -【診察への応答（最重要）】研修医が触診・聴診・打診・視診などの身体診察を指示した場合（例：「腹部を触診します」「Murphy徴候を確認します」「呼吸音を聴診します」「心音を聴診します」「腹膜刺激徴候を確認します」など）は、必ず【身体所見】を回答する。身体所見に記載がない部位は「特に異常は認めません」と答える
@@ -190,12 +159,9 @@ export default function CaseDetailPage() {
 - 絶対に診断名を自分から言わない
 - 検査結果（採血・心電図・画像・培養など）に関する質問には「検査をしてみないとわかりません」と答える。検査結果は次のStep3で提示されるため、このStep2では回答しない
 - 治療法・薬剤・診断基準に関する質問も「先生にお任せします」と答える
-
 【これまでの問診の流れ】
 ${conversationHistory}
-
 研修医の最新の質問/指示に対して患者/家族として返答してください：`;
-
     try {
       const response = await fetch('/api/score', {
         method: 'POST',
@@ -209,38 +175,29 @@ ${conversationHistory}
     }
     setChatLoading(false);
   };
-
   // ===== 指導コメント =====
   const handleGetCoaching = async () => {
     if (messages.length === 0) { alert('まず問診を行ってください'); return; }
     setCoachingLoading(true);
     setShowCoaching(true);
     setInterviewCoaching('');
-
     const conversationHistory = messages.map(m =>
       `${m.role === 'resident' ? '研修医' : '患者/家族'}：${m.text}`
     ).join('\n');
-
     const prompt = `救急・ER専門の指導医として、研修医の問診を評価してください。
-
 【症例】タイトル：${caseData.title}、正解：${caseData.answer_diagnosis || ''}
-
 【問診記録】
 ${conversationHistory}
-
 以下を200字以内でコメント（採点なし）：
 1. 問診で取れている重要な情報
 2. まだ聞けていない重要な点（もしあれば）
-
 ※検査・処置・診断についてのアドバイスや次のステップの提案は一切しないこと。`;
-
     try {
       const response = await fetch('/api/score', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt }),
-  setExamLoading(true);
-        setOtherExamResult('');});
+      });
       const data = await response.json();
       setInterviewCoaching(data.text || data.content || '');
     } catch {
@@ -248,30 +205,27 @@ ${conversationHistory}
     }
     setCoachingLoading(false);
   };
-
   // ===== 検査を選択 =====
   const toggleExam = (examId) => {
     setSelectedExams(prev => ({ ...prev, [examId]: !prev[examId] }));
     setExamDone(false);
   };
-
   const selectedExamIds = Object.entries(selectedExams).filter(([, v]) => v).map(([k]) => k);
   const selectedExamLabels = EXAM_LIST.filter(e => selectedExams[e.id]).map(e => e.label);
-
-  // ===== 検査を実施してAI結果生成 =====
+  // ===== 検査を実施してAI結果生成（追加分のみ生成） =====
   const handleRunExams = async () => {
     const examsToRun = [...selectedExamLabels];
     if (otherExam.trim()) examsToRun.push(`その他：${otherExam}`);
-
-    if (examsToRun.length === 0) { alert('検査を1つ以上選択してください'); return; }    // 既に結果が取得済みの検査を除外（新規追加分のみAIに問い合わせる）    const newExamsToRun = examsToRun.filter(e => !examResults[e]);    if (newExamsToRun.length === 0) { setExamDone(true); return; }    // 既に結果が取得済みの検査を除外（新規追加分のみAI
-
+    if (examsToRun.length === 0) { alert('検査を1つ以上選択してください'); return; }
+    // 既に結果が取得済みの検査を除外（新規追加分のみAIに問い合わせる）
+    const newExamsToRun = examsToRun.filter(e => !examResults[e]);
+    if (newExamsToRun.length === 0) {
+      setExamDone(true);
+      return;
+    }
     setExamLoading(true);
-    setExamResults({});
     setOtherExamResult('');
-
-    // 症例に設定済みの検査結果（initial_labs）を優先、それ以外はAIが生成
     const prompt = `あなたは救急ERの指導医です。以下の症例に対して、研修医が選択した検査の結果を生成してください。
-
 【症例】
 タイトル：${caseData.title}
 主訴：${caseData.chief_complaint || ''}
@@ -279,10 +233,8 @@ ${conversationHistory}
 バイタル：${caseData.vital_signs || ''}
 正解の診断：${caseData.answer_diagnosis || ''}
 症例に設定済みの検査所見：${caseData.initial_labs || '（なし）'}
-
 【研修医が選択した検査】
-${examsToRun.map((e, i) => `${i + 1}. ${e}`).join('\n')}
-
+${newExamsToRun.map((e, i) => `${i + 1}. ${e}`).join('\n')}
 以下のルール：
 - 症例の診断（${caseData.answer_diagnosis}）に関連する検査は、その疾患に特徴的な所見・数値を生成する
 - 症例と直接関係のない検査は「異常なし」と返す
@@ -300,7 +252,6 @@ ${examsToRun.map((e, i) => `${i + 1}. ${e}`).join('\n')}
   BS 100 mg/dL　CRP 0.5 mg/dL
 - 各項目は「項目名 数値 単位」の形式で半角スペースで区切り、同カテゴリをまとめて1行に並べる
 - 箇条書き（・や-）は使わない
-
 以下のJSON形式のみで返答（マークダウン記号・コードブロック不要）：
 {
   "results": {
@@ -309,7 +260,6 @@ ${examsToRun.map((e, i) => `${i + 1}. ${e}`).join('\n')}
   }
 }
 注意：値の中に改行・ダブルクォート・バックスラッシュを含めないこと。血液ガスは「pH 7.32、PaO2 58mmHg、PaCO2 52mmHg、HCO3 24mEq/L、BE -2」のように1行で記載すること。`;
-
     try {
       const response = await fetch('/api/score', {
         method: 'POST',
@@ -318,59 +268,47 @@ ${examsToRun.map((e, i) => `${i + 1}. ${e}`).join('\n')}
       });
       const data = await response.json();
       const raw = (data.text || data.content || '').replace(/```json|```/g, '').trim();
-      // JSONパースを安全に実行（失敗時はフォールバック）
       let parsed = { results: {} };
       try {
         parsed = JSON.parse(raw);
       } catch {
-        // JSONが壊れている場合：テキストをそのまま1件として扱う
-        const firstExam = examsToRun[0] || '検査結果';
+        const firstExam = newExamsToRun[0] || '検査結果';
         parsed = { results: { [firstExam]: raw.substring(0, 500) } };
       }
+      // 既存の結果とマージ（追加分のみ上書き）
       setExamResults(prev => ({ ...prev, ...(parsed.results || {}) }));
       setExamDone(true);
-
-      // ===== 採点用スナップショットを保存（この時点の情報が本人の実力） =====
+      // ===== 採点用スナップショットを保存 =====
       setScoreSnapshot({
         differentials: [...differentials],
         messages: [...messages],
         examLabels: [...selectedExamLabels, otherExam ? otherExam : null].filter(Boolean),
-        examResults: parsed.results || {},
+        examResults: { ...examResults, ...(parsed.results || {}) },
       });
-
     } catch (e) {
       alert('検査結果の取得に失敗しました。もう一度お試しください。');
     }
     setExamLoading(false);
   };
-
   // ===== Step3 指導医コメント =====
   const handleWorkupCoaching = async () => {
     setWorkupCoachingLoading(true);
     setShowWorkupCoaching(true);
     setWorkupCoaching('');
-
     const examSummary = selectedExamLabels.join('、') + (otherExam ? `、${otherExam}` : '');
     const resultSummary = Object.entries(examResults)
       .map(([k, v]) => `${k}：${v}`)
       .join('\n');
-
     const prompt = `救急・ERの指導医として、研修医の検査選択と結果解釈の段階に対してコメントしてください。
-
 【症例】タイトル：${caseData.title}、正解：${caseData.answer_diagnosis || ''}
-
 【研修医が選択した検査】
 ${examSummary || '（なし）'}
-
 【検査結果】
 ${resultSummary || '（なし）'}
-
 200字以内でコメント（採点なし）：
 1. 検査選択の妥当性（良い点）
 2. 選択しておくべきだった検査（もしあれば）
-
 ※次に何をすべきか・診断名・治療方針についてのアドバイスは一切しないこと。`;
-
     try {
       const response = await fetch('/api/score', {
         method: 'POST',
@@ -384,27 +322,19 @@ ${resultSummary || '（なし）'}
     }
     setWorkupCoachingLoading(false);
   };
-
   // ===== 鑑別AIフィードバック =====
   const handleAnalyzeDifferentials = async () => {
     if (differentials.filter(d => d.trim()).length === 0) { alert('鑑別診断を1つ以上入力してください'); return; }
     setAiAnalysis('');
     setAnalysisDone(false);
-
     const prompt = `救急・ERの指導医として、研修医の鑑別診断を評価してください。
-
 【症例】主訴：${caseData.chief_complaint || ''}、バイタル：${caseData.vital_signs || ''}
-
 【研修医の鑑別診断】
 ${differentials.filter(d => d.trim()).map((d, i) => `${i + 1}. ${d}`).join('\n')}
-
 150字以内で教育的フィードバック（採点なし）：
 - 挙げられた鑑別の妥当性（良い点）
 - 見落としていると思われる重要な鑑別（もしあれば1〜2つ）
-
 ※次のステップで何をすべきかのアドバイスや、検査・処置の提案は一切しないこと。`;
-
-
     try {
       const response = await fetch('/api/score', {
         method: 'POST',
@@ -419,59 +349,45 @@ ${differentials.filter(d => d.trim()).map((d, i) => `${i + 1}. ${d}`).join('\n')
       setAnalysisDone(true);
     }
   };
-
-  // ===== 最終採点（スナップショットの情報で採点） =====
+  // ===== 最終採点 =====
   const handleFinalScore = async () => {
     if (!finalDiagnosis.trim()) { alert('最終診断を入力してください'); return; }
     setScoringLoading(true);
-
-    // スナップショットがあればそちらを優先（指導コメント前の情報）
     const snap = scoreSnapshot || {
       differentials,
       messages,
       examLabels: selectedExamLabels,
       examResults,
     };
-
     const interviewRecord = snap.messages.length > 0
       ? snap.messages.map(m => `${m.role === 'resident' ? '研修医' : '患者/家族'}：${m.text}`).join('\n')
       : '（問診なし）';
-
     const examRecord = snap.examLabels.length > 0
       ? snap.examLabels.map(label => `${label}：${snap.examResults[label] || '（結果あり）'}`).join('\n')
       : '（精査なし）';
-
     const prompt = `救急・ERの指導医として研修医の症例対応を100点満点で採点してください。
-
 【重要な採点方針】
 - 評価対象は「問診・身体診察・検査選択・鑑別診断・最終診断」の過程のみです
 - 治療方針・治療薬・診断基準（スコアリングシステム等）への言及は採点対象外です
 - 治療や診断基準については、採点後のteaching_pointで「知識として」補足してください
 - 減点は問診・検査選択・鑑別・最終診断の質にのみ基づいてください
 - 【Step1提示情報は確認済みとして扱う】Step1（症例確認フェーズ）で研修医に提示された情報（主訴・現病歴・既往歴・バイタルサイン・背景情報）は、研修医がすでに確認済みとして扱うこと。Step2の問診でこれらを再確認しなかったことを減点してはならない。Step2では「Step1で得られなかった追加情報」を引き出す質問・診察を評価する
-
 【鑑別診断の評価方針（最重要）】
 - 鑑別診断の評価は「Step1の症例情報（バイタル・主訴・現病歴・初期検査）とStep2の問診・診察」の情報のみに基づいて行うこと
 - 検査結果（Step3で選択した採血・心電図・画像など）は鑑別診断の評価に一切使用しないこと
 - 例：心電図でVTが確認されても、その情報は鑑別診断の評価に使ってはならない。Step1・Step2の情報から鑑別診断としてVT・不整脈を挙げていれば適切と評価する
 - 鑑別診断の順位（第何位か）も、Step1・Step2時点の情報から見て妥当かどうかで判断する。検査結果判明後の視点で「なぜ第一位にしなかったか」と批判してはならない
 - 最終診断と鑑別診断の一致度を論評する際も、検査前の時点での思考過程として評価すること
-
 【症例】タイトル：${caseData.title}、正解の診断：${caseData.answer_diagnosis || ''}
 採点基準：${caseData.scoring_criteria || '総合的に判断'}
-
 【研修医の問診記録（Step2）】
 ${interviewRecord}
-
 【選択した検査】
 ${examRecord}
-
 【鑑別診断】
 ${snap.differentials.filter(d => d.trim()).map((d, i) => `${i + 1}. ${d}`).join('\n') || '（未入力）'}
-
 【最終診断】
 ${finalDiagnosis}
-
 以下のJSON形式のみで返答（マークダウン記号不要）：
 {
   "score": 85,
@@ -489,7 +405,6 @@ ${finalDiagnosis}
   "improvement": "診断過程における改善点1〜2文",
   "teaching_point": "【Teaching Point】\n本症例で研修医が理解できていなかった点・間違えた点を中心に、以下の3点を詳細に解説してください（各100〜150字）。なお、一般的でない医学略語を使う場合は必ず英語のフルスペルと日本語訳を括弧内に記載してください（例：DVT（Deep Vein Thrombosis：深部静脈血栓症））：\n①診断の核心：この疾患を診断するうえで最も重要な思考プロセスや見落としがちな点\n②検査・問診の要点：適切な問診・検査選択のポイントと、研修医が不足していた観点\n③臨床的知識：治療方針・診断基準・類似疾患との鑑別など、この症例で知っておくべき実践的知識"
 }`;
-
     try {
       const response = await fetch('/api/score', {
         method: 'POST',
@@ -503,8 +418,6 @@ ${finalDiagnosis}
       setScoreResult(parsed);
       setPhase('result');
       window.scrollTo({ top: 0, behavior: 'instant' });
-
-      // お試しモードでなければ成績を保存（毎回insertして全履歴を保持）
       const isTrial = sessionStorage.getItem('trial_mode') === 'true';
       if (!isTrial && user) {
         await supabase.from('results').insert({
@@ -525,26 +438,21 @@ ${finalDiagnosis}
     }
     setScoringLoading(false);
   };
-
   const validDifferentials = differentials.filter(d => d.trim());
   const updateDifferential = (idx, val) => {
     const newList = [...differentials];
     newList[idx] = val;
     setDifferentials(newList);
   };
-
   const getDifficultyColor = (d) => ({
     easy: 'bg-green-100 text-green-700',
     medium: 'bg-yellow-100 text-yellow-700',
     hard: 'bg-red-100 text-red-700',
   }[d] || 'bg-gray-100 text-gray-600');
-
   const getDifficultyLabel = (d) => ({ easy: '易', medium: '中', hard: '難' }[d] || '中');
-
   const phaseLabels = ['症例確認', '問診・診察・鑑別', '精査・検査・最終診断'];
   const phaseOrder = ['info', 'interview', 'workup'];
   const currentIdx = phaseOrder.indexOf(phase);
-
   const resetAll = () => {
     setPhase('info');
     setMessages([]);
@@ -563,7 +471,6 @@ ${finalDiagnosis}
     setShowWorkupCoaching(false);
     setScoreSnapshot(null);
   };
-
   if (loading || loadingCase) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -574,7 +481,6 @@ ${finalDiagnosis}
       </div>
     );
   }
-
   if (error || !caseData) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -586,7 +492,6 @@ ${finalDiagnosis}
       </div>
     );
   }
-
   // ===== 結果画面 =====
   if (phase === 'result' && scoreResult) {
     return (
@@ -599,7 +504,6 @@ ${finalDiagnosis}
           </div>
         </header>
         <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
-
           {/* スコアカード */}
           <div className={`rounded-2xl p-6 text-center shadow-lg ${scoreResult.passed ? 'bg-blue-600' : 'bg-gray-500'} text-white`}>
             <div className="text-6xl font-black mb-1">{scoreResult.score}</div>
@@ -611,7 +515,6 @@ ${finalDiagnosis}
               <p className="text-xs text-white/70 mt-2">※ お試しモードのため成績は保存されません</p>
             )}
           </div>
-
           {/* 内訳 */}
           {scoreResult.breakdown && (
             <div className="bg-white rounded-xl shadow-sm p-4">
@@ -634,7 +537,6 @@ ${finalDiagnosis}
               </div>
             </div>
           )}
-
           {/* AIフィードバック */}
           <div className="bg-white rounded-xl shadow-sm p-4 space-y-3">
             <h3 className="font-bold text-gray-700">AIフィードバック</h3>
@@ -670,7 +572,6 @@ ${finalDiagnosis}
               </div>
             )}
           </div>
-
           {/* 選択した検査と結果 */}
           {Object.keys(examResults).length > 0 && (
             <div className="bg-white rounded-xl shadow-sm p-4">
@@ -685,7 +586,6 @@ ${finalDiagnosis}
               </div>
             </div>
           )}
-
           <div className="flex gap-3 pb-6">
             <button onClick={resetAll} className="flex-1 border border-blue-600 text-blue-600 py-3 rounded-xl font-bold text-sm hover:bg-blue-50 transition">🔄 再挑戦</button>
             <button onClick={() => { window.location.href = '/cases'; }} className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-blue-700 transition">📋 症例一覧へ</button>
@@ -694,7 +594,6 @@ ${finalDiagnosis}
       </div>
     );
   }
-
   // ===== メイン画面 =====
   return (
     <div className="min-h-screen bg-gray-50">
@@ -706,7 +605,6 @@ ${finalDiagnosis}
           </span>
         </div>
       </header>
-
       {/* プログレスバー */}
       <div className="bg-white border-b">
         <div className="max-w-2xl mx-auto px-4 py-2">
@@ -726,13 +624,11 @@ ${finalDiagnosis}
           </div>
         </div>
       </div>
-
       <div className="max-w-2xl mx-auto px-4 py-5 space-y-4">
         <div>
           <h1 className="text-xl font-black text-gray-900">{caseData.title}</h1>
           {caseData.category && <span className="text-xs text-gray-400">{caseData.category}</span>}
         </div>
-
         {/* ===== Step1：症例確認 ===== */}
         {phase === 'info' && (
           <>
@@ -765,36 +661,31 @@ ${finalDiagnosis}
               </div>
             )}
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-  <p className="text-sm text-blue-800 font-medium">🏥 来院前情報と第一印象から鑑別診断を考えてください。</p>
-  <p className="text-xs text-blue-600 mt-1">次のステップで患者/家族にAIが代わり応答します。下の鑑別診断欄に現時点での考えを入力できます（任意）。</p>
-</div>
-
-{/* Step1でも鑑別診断入力可（任意） */}
-<div className="bg-white rounded-xl shadow-sm p-4">
-  <h3 className="font-bold text-gray-700 text-sm mb-1">第一印象での鑑別診断（任意）</h3>
-  <p className="text-xs text-gray-400 mb-3">バイタル・主訴から現時点で考える鑑別を入力できます。未記入でも進めます。</p>
-  <div className="space-y-2">
-    {differentials.map((d, i) => (
-      <div key={i} className="flex items-center gap-2">
-        <span className="text-sm font-bold text-gray-400 w-5">{i + 1}</span>
-        <input type="text" value={d} onChange={e => updateDifferential(i, e.target.value)}
-          placeholder={i === 0 ? '最も可能性が高い診断名' : `鑑別診断 ${i + 1}`}
-          className="flex-1 border-2 border-blue-200 bg-blue-50 rounded-lg px-3 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white placeholder-blue-300" />
-      </div>
-    ))}
-  </div>
-</div>
-
+              <p className="text-sm text-blue-800 font-medium">🏥 来院前情報と第一印象から鑑別診断を考えてください。</p>
+              <p className="text-xs text-blue-600 mt-1">次のステップで患者/家族にAIが代わり応答します。下の鑑別診断欄に現時点での考えを入力できます（任意）。</p>
+            </div>
+            <div className="bg-white rounded-xl shadow-sm p-4">
+              <h3 className="font-bold text-gray-700 text-sm mb-1">第一印象での鑑別診断（任意）</h3>
+              <p className="text-xs text-gray-400 mb-3">バイタル・主訴から現時点で考える鑑別を入力できます。未記入でも進めます。</p>
+              <div className="space-y-2">
+                {differentials.map((d, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-gray-400 w-5">{i + 1}</span>
+                    <input type="text" value={d} onChange={e => updateDifferential(i, e.target.value)}
+                      placeholder={i === 0 ? '最も可能性が高い診断名' : `鑑別診断 ${i + 1}`}
+                      className="flex-1 border-2 border-blue-200 bg-blue-50 rounded-lg px-3 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-400 focus:bg-white placeholder-blue-300" />
+                  </div>
+                ))}
+              </div>
+            </div>
             <button onClick={() => setPhase('interview')} className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold text-base hover:bg-blue-700 transition">
               問診・診察を開始する →
             </button>
           </>
         )}
-
         {/* ===== Step2：問診・診察 ===== */}
         {phase === 'interview' && (
           <>
-            {/* Step1情報の折りたたみ確認タブ */}
             <InfoAccordion title="📋 Step1：症例情報を確認する" defaultOpen={false}>
               {caseData.vital_signs && (
                 <div className="mb-3">
@@ -823,7 +714,6 @@ ${finalDiagnosis}
                 </div>
               )}
             </InfoAccordion>
-
             <div className="bg-purple-50 border border-purple-100 rounded-xl p-4">
               <h3 className="font-bold text-purple-700 mb-1">Step 2：問診・診察・鑑別診断</h3>
               <p className="text-xs text-purple-600">患者または家族にAIが役を演じて応答します。診察の指示（「腹部を触らせてください」など）も入力できます。問診後、下の鑑別診断欄に現時点での診断を入力してください。</p>
@@ -844,7 +734,7 @@ ${finalDiagnosis}
                   </div>
                 )}
                 {messages.map((m, i) => (
-  <div key={i} data-msg={i} className={`flex ${m.role === 'resident' ? 'justify-end' : 'justify-start'}`}>
+                  <div key={i} data-msg={i} className={`flex ${m.role === 'resident' ? 'justify-end' : 'justify-start'}`}>
                     <div className={`max-w-xs px-4 py-2.5 rounded-2xl text-sm ${m.role === 'resident' ? 'bg-blue-600 text-white rounded-br-sm' : 'bg-white text-gray-800 shadow-sm rounded-bl-sm border border-gray-100'}`}>
                       <div className={`text-xs mb-1 ${m.role === 'resident' ? 'text-blue-200' : 'text-gray-400'}`}>
                         {m.role === 'resident' ? '研修医（あなた）' : '患者/家族'}
@@ -895,7 +785,6 @@ ${finalDiagnosis}
                 <p className="text-sm text-purple-800 whitespace-pre-wrap">{interviewCoaching}</p>
               </div>
             )}
-            {/* 鑑別診断：Step2内に統合 */}
             <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
               <h3 className="font-bold text-blue-700 mb-1">現時点での鑑別診断（任意）</h3>
               <p className="text-xs text-blue-600">問診・診察を踏まえた現時点での鑑別を入力してください。未記入のまま次へ進むこともできます。</p>
@@ -930,11 +819,9 @@ ${finalDiagnosis}
             </div>
           </>
         )}
-
         {/* ===== Step3：精査・検査 ===== */}
         {phase === 'workup' && (
           <>
-            {/* Step1・Step2情報の折りたたみ確認タブ */}
             <InfoAccordion title="📋 Step1：症例情報を確認する" defaultOpen={false}>
               {caseData.vital_signs && (
                 <div className="mb-3">
@@ -955,7 +842,6 @@ ${finalDiagnosis}
                 </div>
               )}
             </InfoAccordion>
-
             <InfoAccordion title="🗣️ Step2：問診・診察の記録を確認する" defaultOpen={false}>
               {messages.length > 0 ? (
                 <div className="space-y-2">
@@ -977,13 +863,10 @@ ${finalDiagnosis}
                 </div>
               )}
             </InfoAccordion>
-
             <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4">
               <h3 className="font-bold text-indigo-700 mb-1">Step 3：精査・検査 → 最終診断</h3>
               <p className="text-xs text-indigo-600">必要な検査を選択して「検査を実施する」を押すとAIが結果を提示します。結果確認後に最終診断を入力してください。</p>
             </div>
-
-            {/* 鑑別診断サマリー（入力済みの場合） */}
             {validDifferentials.length > 0 && (
               <div className="bg-white rounded-xl shadow-sm p-3">
                 <p className="text-xs font-bold text-gray-400 mb-1">現時点の鑑別診断</p>
@@ -994,8 +877,6 @@ ${finalDiagnosis}
                 </div>
               </div>
             )}
-
-            {/* 検査チェックボックス */}
             <div className="bg-white rounded-xl shadow-sm p-4">
               {EXAM_CATEGORIES.map(cat => (
                 <div key={cat} className="mb-4">
@@ -1015,13 +896,12 @@ ${finalDiagnosis}
                           {selectedExams[exam.id] ? '✓' : ''}
                         </span>
                         {exam.label}
+                        {examResults[exam.label] && <span className="ml-auto text-xs opacity-60">✓済</span>}
                       </button>
                     ))}
                   </div>
                 </div>
               ))}
-
-              {/* その他 */}
               <div className="mt-2">
                 <p className="text-xs font-bold text-gray-500 mb-2 pb-1 border-b border-gray-100">その他</p>
                 <input
@@ -1033,21 +913,19 @@ ${finalDiagnosis}
                 />
               </div>
             </div>
-
-            {/* 選択中の検査 */}
             {(selectedExamIds.length > 0 || otherExam) && (
               <div className="bg-indigo-50 rounded-xl p-3">
                 <p className="text-xs font-bold text-indigo-600 mb-1">選択中の検査（{selectedExamIds.length + (otherExam ? 1 : 0)}件）</p>
                 <div className="flex flex-wrap gap-1">
                   {selectedExamLabels.map(label => (
-                    <span key={label} className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">{label}</span>
+                    <span key={label} className={`text-xs px-2 py-0.5 rounded-full ${examResults[label] ? 'bg-green-100 text-green-700' : 'bg-indigo-100 text-indigo-700'}`}>
+                      {examResults[label] ? '✓ ' : ''}{label}
+                    </span>
                   ))}
                   {otherExam && <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{otherExam}</span>}
                 </div>
               </div>
             )}
-
-            {/* 検査実施ボタン＋結果（ボタンのすぐ下に表示） */}
             <div className="bg-white rounded-xl shadow-sm overflow-hidden">
               <button
                 onClick={handleRunExams}
@@ -1058,11 +936,9 @@ ${finalDiagnosis}
                   <><div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>検査実施中...</>
                 ) : '🔬 検査を実施する'}
               </button>
-
-              {/* 検査結果：ボタンのすぐ下に即時表示 */}
               {examLoading && (
                 <div className="p-4 space-y-2">
-                  {[...selectedExamLabels, otherExam].filter(Boolean).map(label => (
+                  {[...selectedExamLabels, otherExam].filter(l => l && !examResults[l]).map(label => (
                     <div key={label} className="flex items-center gap-3 py-2 border-b border-gray-100">
                       <div className="w-3 h-3 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin flex-shrink-0"></div>
                       <span className="text-sm text-gray-500">{label}　検査中...</span>
@@ -1070,8 +946,7 @@ ${finalDiagnosis}
                   ))}
                 </div>
               )}
-
-              {examDone && Object.keys(examResults).length > 0 && (
+              {Object.keys(examResults).length > 0 && (
                 <div className="divide-y divide-gray-100">
                   {Object.entries(examResults).filter(([k]) => k !== '_key_finding').map(([exam, result]) => (
                     <div key={exam} className="px-4 py-3">
@@ -1082,11 +957,8 @@ ${finalDiagnosis}
                 </div>
               )}
             </div>
-
-            {/* 最終診断：検査結果の下に統合 */}
             {examDone && (
               <>
-                {/* Step3 指導医コメント（任意） */}
                 <button
                   onClick={handleWorkupCoaching}
                   disabled={workupCoachingLoading}
@@ -1100,7 +972,6 @@ ${finalDiagnosis}
                     <p className="text-sm text-purple-800 whitespace-pre-wrap">{workupCoaching}</p>
                   </div>
                 )}
-
                 <div className="bg-green-50 border border-green-100 rounded-xl p-4">
                   <h3 className="font-bold text-green-700 mb-1">最終診断</h3>
                   <p className="text-xs text-green-600">検査結果を踏まえた最終的な診断名を入力してください</p>
@@ -1116,7 +987,6 @@ ${finalDiagnosis}
                 </div>
               </>
             )}
-
             <div className="flex gap-3">
               <button onClick={() => setPhase('interview')} className="flex-1 border border-gray-300 text-gray-600 py-3 rounded-xl font-bold text-sm hover:bg-gray-50 transition">← 戻る</button>
               {examDone ? (
@@ -1137,7 +1007,6 @@ ${finalDiagnosis}
             </div>
           </>
         )}
-
         <div className="h-4"></div>
       </div>
     </div>
