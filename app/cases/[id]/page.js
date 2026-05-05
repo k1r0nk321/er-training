@@ -124,10 +124,15 @@ export default function CaseDetailPage() {
   if (messages.length === 0) return;
   const lastMsg = messages[messages.length - 1];
   if (lastMsg.role === 'patient') {
-    // AI返答が来たらチャット欄の一番上にスクロール（返答が見えるように）
-    chatBottomRef.current?.parentElement?.scrollTo({ top: 0, behavior: 'smooth' });
+    // AI（患者）の返答が来たとき→返答の直前（研修医の発言）位置にスクロール
+    // チャット欄コンテナを取得して、最後から2番目の要素を表示
+    const chatContainer = chatBottomRef.current?.parentElement;
+    if (chatContainer) {
+      const items = chatContainer.querySelectorAll('[data-msg]');
+      const targetIdx = items.length >= 2 ? items.length - 2 : 0;
+      items[targetIdx]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   } else {
-    // 自分の送信後は最下部へ（入力中の確認）
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }
 }, [messages]);
@@ -837,7 +842,7 @@ ${finalDiagnosis}
                   </div>
                 )}
                 {messages.map((m, i) => (
-                  <div key={i} className={`flex ${m.role === 'resident' ? 'justify-end' : 'justify-start'}`}>
+  <div key={i} data-msg={i} className={`flex ${m.role === 'resident' ? 'justify-end' : 'justify-start'}`}>
                     <div className={`max-w-xs px-4 py-2.5 rounded-2xl text-sm ${m.role === 'resident' ? 'bg-blue-600 text-white rounded-br-sm' : 'bg-white text-gray-800 shadow-sm rounded-bl-sm border border-gray-100'}`}>
                       <div className={`text-xs mb-1 ${m.role === 'resident' ? 'text-blue-200' : 'text-gray-400'}`}>
                         {m.role === 'resident' ? '研修医（あなた）' : '患者/家族'}
