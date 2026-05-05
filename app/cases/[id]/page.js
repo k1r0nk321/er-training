@@ -501,6 +501,7 @@ ${finalDiagnosis}
       parsed.passed = (parsed.score >= 80);
       setScoreResult(parsed);
       setPhase('result');
+      window.scrollTo({ top: 0, behavior: 'instant' });
 
       // お試しモードでなければ成績を保存（毎回insertして全履歴を保持）
       const isTrial = sessionStorage.getItem('trial_mode') === 'true';
