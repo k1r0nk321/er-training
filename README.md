@@ -1,5 +1,5 @@
 # ER Training アプリ - デプロイ手順
-<!-- redeploy trigger -->
+<!-- redeploy trigger --> 2
 
 ## このファイルの中身
 - `app/` → アプリの本体
