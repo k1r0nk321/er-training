@@ -121,8 +121,16 @@ export default function CaseDetailPage() {
   }, [user, caseId]);
 
   useEffect(() => {
+  if (messages.length === 0) return;
+  const lastMsg = messages[messages.length - 1];
+  if (lastMsg.role === 'patient') {
+    // AI返答が来たらチャット欄の一番上にスクロール（返答が見えるように）
+    chatBottomRef.current?.parentElement?.scrollTo({ top: 0, behavior: 'smooth' });
+  } else {
+    // 自分の送信後は最下部へ（入力中の確認）
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }
+}, [messages]);
 
   const fetchCase = async () => {
     setLoadingCase(true);
