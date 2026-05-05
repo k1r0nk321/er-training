@@ -60,6 +60,7 @@ export default function CaseDetailPage() {
   const [showCoaching, setShowCoaching] = useState(false);
   const [coachingLoading, setCoachingLoading] = useState(false);
   const chatBottomRef = useRef(null);
+  const step2TopRef = useRef(null);
   // ===== Step3指導医コメント =====
   const [workupCoaching, setWorkupCoaching] = useState('');
   const [workupCoachingLoading, setWorkupCoachingLoading] = useState(false);
@@ -103,11 +104,8 @@ export default function CaseDetailPage() {
     if (messages.length === 0) return;
     const last = messages[messages.length - 1];
     if (last.role === 'patient') {
-      // AI返答時：チャット欄を最下部にスクロール（入力欄が見えるように）
-      const chatContainer = chatBottomRef.current?.parentElement;
-      if (chatContainer) {
-        chatContainer.scrollTop = chatContainer.scrollHeight;
-      }
+      // AI返答時：ページ最上部にスクロール（タイトル・Step1情報から確認できる）
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } else {
       chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
