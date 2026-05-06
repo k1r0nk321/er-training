@@ -59,6 +59,13 @@ export default function CaseDetailPage() {
   const [interviewCoaching, setInterviewCoaching] = useState('');
   const [showCoaching, setShowCoaching] = useState(false);
   const [coachingLoading, setCoachingLoading] = useState(false);
+  // ===== ヒント機能 =====
+  const [interviewHint, setInterviewHint] = useState('');
+  const [interviewHintLoading, setInterviewHintLoading] = useState(false);
+  const [showInterviewHint, setShowInterviewHint] = useState(false);
+  const [differentialHint, setDifferentialHint] = useState('');
+  const [differentialHintLoading, setDifferentialHintLoading] = useState(false);
+  const [showDifferentialHint, setShowDifferentialHint] = useState(false);
   const chatBottomRef = useRef(null);
   const chatRoomRef = useRef(null); // 「問診・診察ルーム」ヘッダーを含む親要素
   const step2TopRef = useRef(null);
@@ -205,6 +212,62 @@ ${conversationHistory}
       setInterviewCoaching('コメントの取得に失敗しました。');
     }
     setCoachingLoading(false);
+  };
+  // ===== 問診ヒント =====
+  const handleGetInterviewHint = async () => {
+    setInterviewHintLoading(true);
+    setShowInterviewHint(true);
+    setInterviewHint('');
+    const prompt = `救急・ER専門の指導医として、研修医がこれから問診・身体診察を行う際のヒントを提供してください。
+【症例】タイトル：${caseData.title}
+主訴：${caseData.chief_complaint || ''}
+バイタルサイン：${caseData.vital_signs || ''}
+【指示】
+- 診断名は絶対に言わないこと
+- 「この症例でまず確認すべき問診のポイント」を3点以内で簡潔に示す
+- 身体診察で確認すべき点があれば1点だけ追加する
+- 100字以内でコンパクトに
+- 具体的な検査・治療には触れないこと`;
+    try {
+      const response = await fetch('/api/score', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      });
+      const data = await response.json();
+      setInterviewHint(data.text || data.content || '');
+    } catch {
+      setInterviewHint('ヒントの取得に失敗しました。');
+    }
+    setInterviewHintLoading(false);
+  };
+  // ===== 鑑別診断ヒント =====
+  const handleGetDifferentialHint = async () => {
+    setDifferentialHintLoading(true);
+    setShowDifferentialHint(true);
+    setDifferentialHint('');
+    const prompt = `救急・ER専門の指導医として、研修医が鑑別診断を考える際のヒントを提供してください。
+【症例】タイトル：${caseData.title}
+主訴：${caseData.chief_complaint || ''}
+バイタルサイン：${caseData.vital_signs || ''}
+現病歴：${caseData.history || ''}
+【指示】
+- 診断名は絶対に言わないこと
+- 「この症例で見落としやすい鑑別の視点」を2〜3点示す（具体的な疾患名は挙げてよい）
+- 「must not miss（絶対に除外しなければならない疾患カテゴリ）」の観点でのヒントを含める
+- 120字以内でコンパクトに`;
+    try {
+      const response = await fetch('/api/score', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      });
+      const data = await response.json();
+      setDifferentialHint(data.text || data.content || '');
+    } catch {
+      setDifferentialHint('ヒントの取得に失敗しました。');
+    }
+    setDifferentialHintLoading(false);
   };
   // ===== 検査を選択 =====
   const toggleExam = (examId) => {
@@ -671,8 +734,8 @@ ${finalDiagnosis}
               <p className="text-xs text-blue-600 mt-1">次のステップで患者/家族にAIが代わり応答します。下の鑑別診断欄に現時点での考えを入力できます（任意）。</p>
             </div>
             <div className="bg-white rounded-xl shadow-sm p-4">
-              <h3 className="font-bold text-gray-700 text-sm mb-1">第一印象での鑑別診断（任意）</h3>
-              <p className="text-xs text-gray-400 mb-3">バイタル・主訴から現時点で考える鑑別を入力できます。未記入でも進めます。</p>
+              <h3 className="font-bold text-gray-700 text-sm mb-1">第一印象での鑑別診断</h3>
+              <p className="text-xs text-gray-400 mb-3">未記入のまま次に進むこともできますが、採点対象です。</p>
               <div className="space-y-2">
                 {differentials.map((d, i) => (
                   <div key={i} className="flex items-center gap-2">
@@ -724,6 +787,20 @@ ${finalDiagnosis}
               <h3 className="font-bold text-purple-700 mb-1">Step 2：問診・診察・鑑別診断</h3>
               <p className="text-xs text-purple-600">患者または家族にAIが役を演じて応答します。診察の指示（「腹部を触らせてください」など）も入力できます。問診後、下の鑑別診断欄に現時点での診断を入力してください。</p>
             </div>
+            {/* 問診ヒント */}
+            <button
+              onClick={handleGetInterviewHint}
+              disabled={interviewHintLoading}
+              className="w-full border border-yellow-400 text-yellow-700 bg-yellow-50 py-2.5 rounded-xl font-bold text-sm hover:bg-yellow-100 disabled:opacity-40 transition flex items-center justify-center gap-2"
+            >
+              {interviewHintLoading ? '🔍 ヒント取得中...' : '💡 問診・診察のヒントを見る'}
+            </button>
+            {showInterviewHint && interviewHint && (
+              <div className="bg-yellow-50 border border-yellow-300 rounded-xl p-4">
+                <h4 className="font-bold text-yellow-700 text-sm mb-2">💡 問診・診察のヒント</h4>
+                <p className="text-sm text-yellow-800 whitespace-pre-wrap">{interviewHint}</p>
+              </div>
+            )}
             <div ref={chatRoomRef} className="bg-white rounded-xl shadow-sm overflow-hidden">
               <div className="bg-gray-800 px-4 py-2 flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-red-400"></div>
@@ -792,9 +869,23 @@ ${finalDiagnosis}
               </div>
             )}
             <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
-              <h3 className="font-bold text-blue-700 mb-1">現時点での鑑別診断（任意）</h3>
-              <p className="text-xs text-blue-600">問診・診察を踏まえた現時点での鑑別を入力してください。未記入のまま次へ進むこともできます。</p>
+              <h3 className="font-bold text-blue-700 mb-1">現時点での鑑別診断</h3>
+              <p className="text-xs text-blue-600">未記入のまま次に進むこともできますが、採点対象です。</p>
             </div>
+            {/* 鑑別診断ヒント */}
+            <button
+              onClick={handleGetDifferentialHint}
+              disabled={differentialHintLoading}
+              className="w-full border border-yellow-400 text-yellow-700 bg-yellow-50 py-2.5 rounded-xl font-bold text-sm hover:bg-yellow-100 disabled:opacity-40 transition flex items-center justify-center gap-2"
+            >
+              {differentialHintLoading ? '🔍 ヒント取得中...' : '💡 鑑別診断のヒントを見る'}
+            </button>
+            {showDifferentialHint && differentialHint && (
+              <div className="bg-yellow-50 border border-yellow-300 rounded-xl p-4">
+                <h4 className="font-bold text-yellow-700 text-sm mb-2">💡 鑑別診断のヒント</h4>
+                <p className="text-sm text-yellow-800 whitespace-pre-wrap">{differentialHint}</p>
+              </div>
+            )}
             <div className="bg-white rounded-xl shadow-sm p-4 space-y-3">
               {differentials.map((d, i) => (
                 <div key={i} className="flex items-center gap-2">
