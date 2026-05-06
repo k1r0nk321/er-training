@@ -60,6 +60,7 @@ export default function CaseDetailPage() {
   const [showCoaching, setShowCoaching] = useState(false);
   const [coachingLoading, setCoachingLoading] = useState(false);
   const chatBottomRef = useRef(null);
+  const chatRoomRef = useRef(null); // 「問診・診察ルーム」ヘッダーを含む親要素
   const step2TopRef = useRef(null);
   // ===== Step3指導医コメント =====
   const [workupCoaching, setWorkupCoaching] = useState('');
@@ -104,8 +105,10 @@ export default function CaseDetailPage() {
     if (messages.length === 0) return;
     const last = messages[messages.length - 1];
     if (last.role === 'patient') {
-      // AI返答時：ページ最上部にスクロール（タイトル・Step1情報から確認できる）
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      // AI返答時：「問診・診察ルーム」ヘッダーが画面最上端に来るようスクロール
+      setTimeout(() => {
+        chatRoomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 50);
     } else {
       chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
@@ -721,7 +724,7 @@ ${finalDiagnosis}
               <h3 className="font-bold text-purple-700 mb-1">Step 2：問診・診察・鑑別診断</h3>
               <p className="text-xs text-purple-600">患者または家族にAIが役を演じて応答します。診察の指示（「腹部を触らせてください」など）も入力できます。問診後、下の鑑別診断欄に現時点での診断を入力してください。</p>
             </div>
-            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+            <div ref={chatRoomRef} className="bg-white rounded-xl shadow-sm overflow-hidden">
               <div className="bg-gray-800 px-4 py-2 flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-red-400"></div>
                 <div className="w-2 h-2 rounded-full bg-yellow-400"></div>
