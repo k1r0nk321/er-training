@@ -302,7 +302,7 @@ export default function AdminPage() {
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
           <button onClick={() => router.push('/')} className="text-gray-300 text-sm">← トップ</button>
           <h1 className="text-lg font-bold">🔧 管理者ダッシュボード</h1>
-          <div className="text-xs text-gray-400">{userProfile?.name}</div>
+          <div className="flex items-center gap-2"><a href="https://console.anthropic.com/settings/billing" target="_blank" rel="noopener noreferrer" className="text-xs bg-emerald-600 text-white px-3 py-1 rounded-lg font-bold hover:bg-emerald-500 transition">💳 残高確認</a><div className="flex items-center gap-2"><a href="https://console.anthropic.com/settings/billing" target="_blank" rel="noopener noreferrer" className="text-xs bg-emerald-600 text-white px-3 py-1 rounded-lg font-bold hover:bg-emerald-500 transition">💳 残高確認</a><div className="text-xs text-gray-400">{userProfile?.name}</div></div></div>
         </div>
         <div className="max-w-5xl mx-auto px-4 flex gap-1 pb-1 overflow-x-auto">
           {[
