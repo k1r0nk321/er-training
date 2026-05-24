@@ -90,7 +90,7 @@ export default function AdminPage() {
       supabase.from('users').select('*').order('created_at', { ascending: false }),
       supabase.from('cases').select('*').order('created_at', { ascending: false }),
       supabase.from('results').select('*').order('created_at', { ascending: false }),
-      supabase.from('announcements').select('*').order('created_at', { ascending: false }),
+      supabase.from('announcements').select('*').eq('app_name', 'er_training').order('created_at', { ascending: false }),
       supabase.from('app_updates').select('*').order('created_at', { ascending: false }),
       supabase.from('app_settings').select('value').eq('key', 'trial_password').single(),
     ]);
@@ -218,7 +218,7 @@ export default function AdminPage() {
     setPostingAnnounce(true);
     const { error } = await supabase.from('announcements').insert({
       title: newAnnouncement.title, body: newAnnouncement.body,
-      important: newAnnouncement.important, created_by: user.id,
+      important: newAnnouncement.important, app_name: 'er_training', created_by: user.id,
       created_at: new Date().toISOString(),
     });
     if (error) { alert('投稿に失敗しました'); }
