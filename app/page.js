@@ -111,6 +111,7 @@ export default function HomePage() {
     const { data } = await supabase
       .from('announcements')
       .select('*')
+      .eq('app_name', 'er_training')
       .order('created_at', { ascending: false })
       .limit(5);
     setAnnouncements(data || []);
