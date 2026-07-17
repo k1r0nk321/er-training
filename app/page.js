@@ -282,7 +282,7 @@ export default function HomePage() {
           href="https://www.takedahp.or.jp/ijinkai/recruit/specialist/"
           target="_blank"
           rel="noopener noreferrer"
-          className="block w-full text-center bg-blue-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-blue-700 transition"
+          className="block w-full text-center bg-green-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-green-700 transition"
         >
           専攻医募集ページを見る →
         </a>
