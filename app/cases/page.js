@@ -119,7 +119,12 @@ export default function CasesPage() {
     if (error) {
       setError('症例の読み込みに失敗しました');
     } else {
-      setCases(data || []);
+      // お試しモードは「救急基本症例集 かつ 難易度=易しい」の症例のみ体験可能
+      const trial = sessionStorage.getItem('trial_mode') === 'true' && !user;
+      const list = trial
+        ? (data || []).filter(c => c.is_basic === true && c.difficulty === 'easy')
+        : (data || []);
+      setCases(list);
     }
     setLoadingCases(false);
   };

@@ -101,6 +101,9 @@ export default function HomePage() {
   const [announcements, setAnnouncements] = useState([]);
   const [appUpdates, setAppUpdates] = useState([]);
 
+  // 本アプリについて（ポップアップ）
+  const [showAbout, setShowAbout] = useState(false);
+
   useEffect(() => {
     fetchAnnouncements();
     fetchTrialPw();
@@ -253,6 +256,47 @@ export default function HomePage() {
     setDeleteLoading(false);
   };
 
+  // 本アプリについて（ポップアップ）— ログイン画面・トップ画面で共通利用
+  const aboutModal = showAbout ? (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={() => setShowAbout(false)}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 space-y-4"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold text-gray-800 text-lg">本アプリについて</h3>
+          <button
+            onClick={() => setShowAbout(false)}
+            className="text-gray-400 hover:text-gray-600 text-sm px-1"
+            aria-label="閉じる"
+          >
+            ✕
+          </button>
+        </div>
+        <p className="text-sm text-gray-600 leading-relaxed">
+          本アプリは、医仁会武田総合病院の臨床研修PG責任者が教育目的で作成しました。興味を持っていただいた方は、ぜひご見学をお待ちしています。
+        </p>
+        <a
+          href="https://www.takedahp.or.jp/ijinkai/recruit/trainee/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block w-full text-center bg-blue-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-blue-700 transition"
+        >
+          研修医募集ページを見る →
+        </a>
+        <button
+          onClick={() => setShowAbout(false)}
+          className="w-full text-xs text-gray-400 hover:text-gray-600 py-1"
+        >
+          閉じる
+        </button>
+      </div>
+    </div>
+  ) : null;
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -397,6 +441,12 @@ export default function HomePage() {
               className="w-24 h-24 rounded-full object-cover shadow-md ring-4 ring-white mx-auto mb-2"
             />
             <h1 className="text-2xl font-black text-gray-900">ER Training</h1>
+            <button
+              onClick={() => setShowAbout(true)}
+              className="text-xs text-blue-600 hover:text-blue-800 underline mt-1"
+            >
+              本アプリについて
+            </button>
           </div>
 
           {/* プロフィールカード */}
@@ -636,6 +686,8 @@ export default function HomePage() {
             </button>
           </div>
         </div>
+
+        {aboutModal}
       </div>
     );
   }
@@ -651,6 +703,12 @@ export default function HomePage() {
             className="w-40 h-40 rounded-full object-cover shadow-lg ring-4 ring-white mx-auto mb-3"
           />
           <h1 className="text-3xl font-black text-gray-900">ER Training</h1>
+          <button
+            onClick={() => setShowAbout(true)}
+            className="text-xs text-blue-600 hover:text-blue-800 underline mt-1"
+          >
+            本アプリについて
+          </button>
         </div>
 
         {/* タブ切替 */}
@@ -767,7 +825,7 @@ export default function HomePage() {
           <div className="bg-white rounded-2xl shadow-sm p-6 space-y-4">
             <h2 className="font-bold text-gray-700">お試しモード</h2>
             <p className="text-xs text-gray-500">
-              共通パスワードで症例を体験できます。成績は保存されません。<br />
+              共通パスワードで一部の症例のみ体験できます。成績は保存されません。<br />
               パスワードは管理者にお問い合わせください。
             </p>
             <div className="relative">
@@ -822,6 +880,8 @@ export default function HomePage() {
           </div>
         )}
       </div>
+
+      {aboutModal}
     </div>
   );
 }
