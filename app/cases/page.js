@@ -1,10 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../lib/auth-context';
 import { supabase } from '../lib/supabase';
 import { DOMAINS, getDomain } from '../lib/domains';
+
+// お試しモードで選択・絞り込みできる領域（この2領域のみ切替可能）
+const TRIAL_ALLOWED_DOMAINS = ['総合内科', '循環器'];
 
 export default function CasesPage() {
   const { user, userProfile, loading } = useAuth();
@@ -28,6 +31,15 @@ export default function CasesPage() {
 
   // 絞り込み条件の保存/復元制御
   const [prefsLoaded, setPrefsLoaded] = useState(false);
+
+  // お試しモードで変更不可の操作をした時のロック通知
+  const [lockMsg, setLockMsg] = useState(false);
+  const lockTimer = useRef(null);
+  const showLock = () => {
+    setLockMsg(true);
+    if (lockTimer.current) clearTimeout(lockTimer.current);
+    lockTimer.current = setTimeout(() => setLockMsg(false), 2800);
+  };
 
   // 統計
   const [myResults, setMyResults] = useState({});
@@ -69,17 +81,17 @@ export default function CasesPage() {
 
   useEffect(() => {
     applyFilter();
-  }, [cases, searchText, selectedDifficulty, selectedCategory, sortOrder, showBasicOnly, resultFilter, selectedDomains, myResults]);
+  }, [cases, searchText, selectedDifficulty, selectedCategory, sortOrder, showBasicOnly, resultFilter, selectedDomains, myResults, isTrialMode]);
 
   // ===== 絞り込み条件の復元（IDに紐づけてDB保存されたもの） =====
   useEffect(() => {
     if (prefsLoaded) return;
     if (loading) return; // 認証・プロフィール確定待ち
     if (isTrialMode) {
-      // お試しは保存しない。フィルターを「救急基本症例集・易しい・総合内科/循環器」の選択状態で表示
-      setShowBasicOnly(true);
-      setSelectedDifficulty('easy');
-      setSelectedDomains(['総合内科', '循環器']);
+      // お試しは保存しない。領域は総合内科/循環器のみ選択状態に。
+      // 難易度・カテゴリは固定表示（applyFilterで強制）だが、件数は全登録数を見せるため
+      // showBasicOnly / selectedDifficulty は既定(all)のままにしてカウントを full にする。
+      setSelectedDomains([...TRIAL_ALLOWED_DOMAINS]);
       setPrefsLoaded(true);
       return;
     }
@@ -126,17 +138,8 @@ export default function CasesPage() {
     if (error) {
       setError('症例の読み込みに失敗しました');
     } else {
-      // お試しモードは「救急基本症例集 かつ 難易度=易しい かつ 領域=総合内科/循環器」の7例のみ体験可能
-      const trial = sessionStorage.getItem('trial_mode') === 'true' && !user;
-      const TRIAL_DOMAINS = ['総合内科', '循環器'];
-      const list = trial
-        ? (data || []).filter(c =>
-            c.is_basic === true &&
-            c.difficulty === 'easy' &&
-            TRIAL_DOMAINS.includes(getDomain(c.category))
-          )
-        : (data || []);
-      setCases(list);
+      // 全症例を読み込む（お試しモードでも登録総数を見せる。選択可能な症例の絞り込みは applyFilter で行う）
+      setCases(data || []);
     }
     setLoadingCases(false);
   };
@@ -180,6 +183,13 @@ export default function CasesPage() {
 
   const applyFilter = () => {
     let filtered = cases.filter(c => {
+      // お試しモード：救急基本症例集×易しい×選択領域(総合内科/循環器)に固定
+      if (isTrialMode) {
+        if (c.is_basic !== true) return false;
+        if (c.difficulty !== 'easy') return false;
+        if (!selectedDomains.includes(getDomain(c.category))) return false;
+        return true;
+      }
       if (showBasicOnly && c.is_basic !== true) return false;
       if (selectedDifficulty !== 'all' && c.difficulty !== selectedDifficulty) return false;
       if (!matchesSearch(c)) return false;
@@ -227,7 +237,8 @@ export default function CasesPage() {
     if (!matchesResult(c)) return false;
     return true;
   });
-  const domainCount = (d) => nonDomainFiltered.filter(c => getDomain(c.category) === d).length;
+  // お試しモードは登録総数を見せるため全症例から数える
+  const domainCount = (d) => (isTrialMode ? cases : nonDomainFiltered).filter(c => getDomain(c.category) === d).length;
 
   // 全体の統計（サマリー用）
   const totalAll = cases.length;
@@ -251,6 +262,11 @@ export default function CasesPage() {
   };
 
   const toggleDomain = (d) => {
+    // お試しモードは総合内科/循環器のみ切替可能。それ以外はロック通知
+    if (isTrialMode && !TRIAL_ALLOWED_DOMAINS.includes(d)) {
+      showLock();
+      return;
+    }
     setSelectedDomains(prev =>
       prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]
     );
@@ -391,16 +407,20 @@ export default function CasesPage() {
         <div className="mb-5">
           <button
             onClick={handleRandomSelect}
-            disabled={filteredCases.length === 0}
+            disabled={filteredCases.length === 0 || lockMsg}
             className={`w-full py-3.5 rounded-xl font-bold text-sm transition ${
-              filteredCases.length === 0
-                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                : 'bg-blue-600 text-white hover:bg-blue-700'
+              lockMsg
+                ? 'bg-amber-100 text-amber-700 cursor-not-allowed'
+                : filteredCases.length === 0
+                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  : 'bg-blue-600 text-white hover:bg-blue-700'
             }`}
           >
-            {filteredCases.length === 0
-              ? '😶 該当する症例がありません'
-              : `🎲 ランダムに挑戦（以下の条件で絞り込み・${filteredCases.length}件）`}
+            {lockMsg
+              ? 'お試しモードでは、絞り込み条件の変更はできません'
+              : filteredCases.length === 0
+                ? '😶 該当する症例がありません'
+                : `🎲 ランダムに挑戦（以下の条件で絞り込み・${filteredCases.length}件）`}
           </button>
         </div>
 
@@ -410,10 +430,16 @@ export default function CasesPage() {
           {/* 検索（自由記入欄） */}
           <input
             type="text"
-            placeholder="症例名・主訴・番号で検索..."
+            placeholder={isTrialMode ? 'お試しモードでは検索は使えません' : '症例名・主訴・番号で検索...'}
             value={searchText}
-            onChange={e => setSearchText(e.target.value)}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+            readOnly={isTrialMode}
+            onChange={e => { if (!isTrialMode) setSearchText(e.target.value); }}
+            onMouseDown={() => { if (isTrialMode) showLock(); }}
+            className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none ${
+              isTrialMode
+                ? 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
+                : 'border-gray-200 focus:ring-2 focus:ring-blue-300'
+            }`}
           />
 
           {/* カテゴリ（救急基本症例集） */}
@@ -421,9 +447,9 @@ export default function CasesPage() {
             <p className="text-xs text-gray-400 font-medium mb-1.5">カテゴリ</p>
             <div className="flex gap-2 flex-wrap">
               <button
-                onClick={() => { setShowBasicOnly(false); setSelectedCategory('all'); }}
+                onClick={() => { if (isTrialMode) { showLock(); return; } setShowBasicOnly(false); setSelectedCategory('all'); }}
                 className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
-                  !showBasicOnly && selectedCategory === 'all'
+                  (isTrialMode ? false : (!showBasicOnly && selectedCategory === 'all'))
                     ? 'bg-blue-600 text-white'
                     : 'bg-white text-gray-600 border border-gray-200'
                 }`}
@@ -431,9 +457,9 @@ export default function CasesPage() {
                 すべて（{totalAll}）
               </button>
               <button
-                onClick={() => { setShowBasicOnly(true); setSelectedCategory('all'); }}
+                onClick={() => { if (isTrialMode) { showLock(); return; } setShowBasicOnly(true); setSelectedCategory('all'); }}
                 className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
-                  showBasicOnly
+                  (isTrialMode ? true : showBasicOnly)
                     ? 'bg-red-600 text-white'
                     : 'bg-white text-red-600 border border-red-300'
                 }`}
@@ -459,12 +485,13 @@ export default function CasesPage() {
                   if (opt.value !== 'all' && c.difficulty !== opt.value) return false;
                   return true;
                 }).length;
+                const active = isTrialMode ? (opt.value === 'easy') : (selectedDifficulty === opt.value);
                 return (
                   <button
                     key={opt.value}
-                    onClick={() => setSelectedDifficulty(opt.value)}
+                    onClick={() => { if (isTrialMode) { showLock(); return; } setSelectedDifficulty(opt.value); }}
                     className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
-                      selectedDifficulty === opt.value
+                      active
                         ? opt.value === 'easy' ? 'bg-green-600 text-white'
                           : opt.value === 'medium' ? 'bg-yellow-500 text-white'
                           : opt.value === 'hard' ? 'bg-red-600 text-white'
@@ -533,27 +560,35 @@ export default function CasesPage() {
               <p className="text-xs text-gray-400 font-medium">
                 領域（{selectedDomains.length}/{DOMAINS.length}）
               </p>
-              <div className="flex gap-2">
-                <button
-                  onClick={selectAllDomains}
-                  disabled={allDomainsSelected}
-                  className="text-xs text-blue-500 hover:text-blue-700 disabled:text-gray-300 disabled:cursor-default underline"
-                >
-                  すべて選択
-                </button>
-                <button
-                  onClick={clearDomains}
-                  disabled={selectedDomains.length === 0}
-                  className="text-xs text-gray-400 hover:text-gray-600 disabled:text-gray-200 disabled:cursor-default underline"
-                >
-                  クリア
-                </button>
-              </div>
+              {!isTrialMode && (
+                <div className="flex gap-2">
+                  <button
+                    onClick={selectAllDomains}
+                    disabled={allDomainsSelected}
+                    className="text-xs text-blue-500 hover:text-blue-700 disabled:text-gray-300 disabled:cursor-default underline"
+                  >
+                    すべて選択
+                  </button>
+                  <button
+                    onClick={clearDomains}
+                    disabled={selectedDomains.length === 0}
+                    className="text-xs text-gray-400 hover:text-gray-600 disabled:text-gray-200 disabled:cursor-default underline"
+                  >
+                    クリア
+                  </button>
+                </div>
+              )}
             </div>
+            {isTrialMode && (
+              <p className="text-xs text-indigo-500 mb-1.5">
+                お試しモードでは総合内科・循環器の切替のみ可能です
+              </p>
+            )}
             <div className="flex gap-2 flex-wrap">
               {DOMAINS.map(d => {
                 const checked = selectedDomains.includes(d);
                 const count = domainCount(d);
+                const locked = isTrialMode && !TRIAL_ALLOWED_DOMAINS.includes(d);
                 return (
                   <button
                     key={d}
@@ -562,7 +597,7 @@ export default function CasesPage() {
                       checked
                         ? 'bg-blue-600 text-white border-blue-600'
                         : 'bg-white text-gray-500 border-gray-200'
-                    }`}
+                    } ${locked ? 'opacity-40 cursor-not-allowed' : ''}`}
                   >
                     <span className="mr-1">{checked ? '☑' : '☐'}</span>
                     {d}（{count}）
@@ -587,7 +622,7 @@ export default function CasesPage() {
           {/* 件数表示 + フィルタークリア */}
           <div className="flex items-center justify-between pt-1">
             <p className="text-xs text-gray-400">{filteredCases.length}件表示</p>
-            {hasActiveFilter && (
+            {!isTrialMode && hasActiveFilter && (
               <button
                 onClick={resetFilters}
                 className="text-xs text-blue-500 hover:text-blue-700 underline"
@@ -641,7 +676,7 @@ export default function CasesPage() {
             <div className="text-center py-12 text-gray-400">
               <p className="text-4xl mb-3">📋</p>
               <p>該当する症例がありません</p>
-              {hasActiveFilter && (
+              {!isTrialMode && hasActiveFilter && (
                 <button
                   onClick={resetFilters}
                   className="mt-3 text-sm text-blue-500 hover:text-blue-700 underline"
