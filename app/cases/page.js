@@ -75,7 +75,14 @@ export default function CasesPage() {
   useEffect(() => {
     if (prefsLoaded) return;
     if (loading) return; // 認証・プロフィール確定待ち
-    if (isTrialMode) { setPrefsLoaded(true); return; } // お試しは保存しない
+    if (isTrialMode) {
+      // お試しは保存しない。フィルターを「救急基本症例集・易しい・総合内科/循環器」の選択状態で表示
+      setShowBasicOnly(true);
+      setSelectedDifficulty('easy');
+      setSelectedDomains(['総合内科', '循環器']);
+      setPrefsLoaded(true);
+      return;
+    }
     if (!user) return;
 
     const p = userProfile?.case_filter_prefs;
