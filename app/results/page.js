@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../lib/auth-context';
 import { supabase } from '../lib/supabase';
+import { getDomain } from '../lib/domains';
 
 export default function ResultsPage() {
   const { user, loading } = useAuth();
@@ -58,12 +59,12 @@ export default function ResultsPage() {
   const totalPassed = latestResults.filter(r => r.passed).length;
   const totalAttempts = results.length;
 
-  // 領域別集計：カテゴリごとに「総症例数・挑戦済み・合格数・不合格症例リスト」
+  // 領域別集計：領域（15分類）ごとに「総症例数・挑戦済み・合格数・不合格症例リスト」
   const categoryStats = {};
 
-  // まず全症例からカテゴリを洗い出す
+  // まず全症例を領域（category先頭語から導出）で洗い出す
   allCases.forEach(c => {
-    const cat = c.category || '未分類';
+    const cat = getDomain(c.category);
     if (!categoryStats[cat]) {
       categoryStats[cat] = {
         total: 0,         // その領域の総症例数

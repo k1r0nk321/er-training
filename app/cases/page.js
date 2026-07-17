@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../lib/auth-context';
 import { supabase } from '../lib/supabase';
+import { DOMAINS, getDomain } from '../lib/domains';
 
 export default function CasesPage() {
   const { user, userProfile, loading } = useAuth();
@@ -23,6 +24,10 @@ export default function CasesPage() {
   const [sortOrder, setSortOrder] = useState('number');
   const [showBasicOnly, setShowBasicOnly] = useState(false);
   const [resultFilter, setResultFilter] = useState('all'); // 'all' | 'unsolved' | 'failed'
+  const [selectedDomains, setSelectedDomains] = useState([...DOMAINS]); // 初期は全領域チェック
+
+  // 絞り込み条件の保存/復元制御
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
 
   // 統計
   const [myResults, setMyResults] = useState({});
@@ -64,7 +69,46 @@ export default function CasesPage() {
 
   useEffect(() => {
     applyFilter();
-  }, [cases, searchText, selectedDifficulty, selectedCategory, sortOrder, showBasicOnly, resultFilter, myResults]);
+  }, [cases, searchText, selectedDifficulty, selectedCategory, sortOrder, showBasicOnly, resultFilter, selectedDomains, myResults]);
+
+  // ===== 絞り込み条件の復元（IDに紐づけてDB保存されたもの） =====
+  useEffect(() => {
+    if (prefsLoaded) return;
+    if (loading) return; // 認証・プロフィール確定待ち
+    if (isTrialMode) { setPrefsLoaded(true); return; } // お試しは保存しない
+    if (!user) return;
+
+    const p = userProfile?.case_filter_prefs;
+    if (p && typeof p === 'object') {
+      if (typeof p.searchText === 'string') setSearchText(p.searchText);
+      if (['all', 'easy', 'medium', 'hard'].includes(p.selectedDifficulty)) setSelectedDifficulty(p.selectedDifficulty);
+      if (typeof p.showBasicOnly === 'boolean') setShowBasicOnly(p.showBasicOnly);
+      if (['all', 'unsolved', 'failed'].includes(p.resultFilter)) setResultFilter(p.resultFilter);
+      if (Array.isArray(p.selectedDomains)) {
+        const valid = p.selectedDomains.filter(d => DOMAINS.includes(d));
+        setSelectedDomains(valid.length ? valid : [...DOMAINS]);
+      }
+      if (['number', 'newest', 'difficulty_asc', 'title'].includes(p.sortOrder)) setSortOrder(p.sortOrder);
+    }
+    setPrefsLoaded(true);
+  }, [user, userProfile, loading, isTrialMode, prefsLoaded]);
+
+  // ===== 絞り込み条件の保存（IDに紐づけてDBへ、変更を検知して自動保存） =====
+  useEffect(() => {
+    if (!prefsLoaded || !user || isTrialMode) return;
+    const prefs = {
+      searchText,
+      selectedDifficulty,
+      showBasicOnly,
+      resultFilter,
+      selectedDomains,
+      sortOrder,
+    };
+    const t = setTimeout(() => {
+      supabase.from('users').update({ case_filter_prefs: prefs }).eq('id', user.id);
+    }, 600);
+    return () => clearTimeout(t);
+  }, [prefsLoaded, user, isTrialMode, searchText, selectedDifficulty, showBasicOnly, resultFilter, selectedDomains, sortOrder]);
 
   const fetchCases = async () => {
     setLoadingCases(true);
@@ -101,40 +145,31 @@ export default function CasesPage() {
     }
   };
 
+  // ===== 共通フィルター述語 =====
+  const matchesSearch = (c) => !searchText || (
+    c.title?.includes(searchText) ||
+    c.chief_complaint?.includes(searchText) ||
+    c.category?.includes(searchText) ||
+    String(c.case_number).includes(searchText)
+  );
+
+  const matchesResult = (c) => {
+    if (resultFilter === 'unsolved') return !myResults[c.id];
+    if (resultFilter === 'failed') return myResults[c.id] && !myResults[c.id].passed;
+    return true;
+  };
+
+  const matchesDomain = (c) => selectedDomains.includes(getDomain(c.category));
+
   const applyFilter = () => {
-    let filtered = [...cases];
-
-    // 救急基本症例集フィルター
-    if (showBasicOnly) {
-      filtered = filtered.filter(c => c.is_basic === true);
-    }
-
-    // テキスト検索
-    if (searchText) {
-      filtered = filtered.filter(c =>
-        c.title?.includes(searchText) ||
-        c.chief_complaint?.includes(searchText) ||
-        c.category?.includes(searchText) ||
-        String(c.case_number).includes(searchText)
-      );
-    }
-
-    // 難易度フィルター
-    if (selectedDifficulty !== 'all') {
-      filtered = filtered.filter(c => c.difficulty === selectedDifficulty);
-    }
-
-    // カテゴリフィルター
-    if (selectedCategory !== 'all') {
-      filtered = filtered.filter(c => c.category === selectedCategory);
-    }
-
-    // 回答状況フィルター
-    if (resultFilter === 'unsolved') {
-      filtered = filtered.filter(c => !myResults[c.id]);
-    } else if (resultFilter === 'failed') {
-      filtered = filtered.filter(c => myResults[c.id] && !myResults[c.id].passed);
-    }
+    let filtered = cases.filter(c => {
+      if (showBasicOnly && c.is_basic !== true) return false;
+      if (selectedDifficulty !== 'all' && c.difficulty !== selectedDifficulty) return false;
+      if (!matchesSearch(c)) return false;
+      if (!matchesResult(c)) return false;
+      if (!matchesDomain(c)) return false;
+      return true;
+    });
 
     // ソート
     if (sortOrder === 'number') {
@@ -151,19 +186,14 @@ export default function CasesPage() {
     setFilteredCases(filtered);
   };
 
-  // ===== カウント計算（フィルター条件を考慮した母数） =====
+  // ===== カウント計算 =====
 
-  // 現在の「カテゴリ+難易度」フィルターを適用した母数リスト（回答状況フィルターは除く）
+  // 「基本症例・難易度・検索・領域」フィルターを適用した母数（回答状況フィルターは除く）
   const baseFilteredCases = cases.filter(c => {
     if (showBasicOnly && !c.is_basic) return false;
     if (selectedDifficulty !== 'all' && c.difficulty !== selectedDifficulty) return false;
-    if (selectedCategory !== 'all' && c.category !== selectedCategory) return false;
-    if (searchText && !(
-      c.title?.includes(searchText) ||
-      c.chief_complaint?.includes(searchText) ||
-      c.category?.includes(searchText) ||
-      String(c.case_number).includes(searchText)
-    )) return false;
+    if (!matchesSearch(c)) return false;
+    if (!matchesDomain(c)) return false;
     return true;
   });
 
@@ -172,12 +202,24 @@ export default function CasesPage() {
   const baseFailed = baseFilteredCases.filter(c => myResults[c.id] && !myResults[c.id].passed).length;
   const basePassed = baseFilteredCases.filter(c => myResults[c.id] && myResults[c.id].passed).length;
 
+  // 領域チェックボックス用の件数（領域以外のフィルターを適用した母数）
+  const nonDomainFiltered = cases.filter(c => {
+    if (showBasicOnly && !c.is_basic) return false;
+    if (selectedDifficulty !== 'all' && c.difficulty !== selectedDifficulty) return false;
+    if (!matchesSearch(c)) return false;
+    if (!matchesResult(c)) return false;
+    return true;
+  });
+  const domainCount = (d) => nonDomainFiltered.filter(c => getDomain(c.category) === d).length;
+
   // 全体の統計（サマリー用）
   const totalAll = cases.length;
   const passedAll = Object.values(myResults).filter(r => r.passed).length;
   const failedAll = Object.values(myResults).filter(r => !r.passed).length;
   const unsolvedAll = cases.length - Object.keys(myResults).length;
   const basicCount = cases.filter(c => c.is_basic).length;
+
+  const allDomainsSelected = selectedDomains.length === DOMAINS.length;
 
   // 難易度ラベル（ボタン表示用）
   const difficultyLabel = {
@@ -191,33 +233,28 @@ export default function CasesPage() {
     return '#' + String(n).padStart(3, '0');
   };
 
+  const toggleDomain = (d) => {
+    setSelectedDomains(prev =>
+      prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]
+    );
+  };
+  const selectAllDomains = () => setSelectedDomains([...DOMAINS]);
+  const clearDomains = () => setSelectedDomains([]);
+
   const handleRandomSelect = () => {
     if (filteredCases.length === 0) return;
     const randomCase = filteredCases[Math.floor(Math.random() * filteredCases.length)];
     router.push(`/cases/${randomCase.id}`);
   };
 
-  const handleRandomUnsolved = () => {
-    const unsolved = filteredCases.filter(c => !myResults[c.id]);
-    if (unsolved.length === 0) {
-      alert('未解答の症例はありません！すべて挑戦済みです 🎉');
-      return;
-    }
-    const randomCase = unsolved[Math.floor(Math.random() * unsolved.length)];
-    router.push(`/cases/${randomCase.id}`);
-  };
-
-  const handleRandomFailed = () => {
-    const failed = filteredCases.filter(c => myResults[c.id] && !myResults[c.id].passed);
-    if (failed.length === 0) {
-      alert('不合格の症例はありません！');
-      return;
-    }
-    const diffOrder = { easy: 1, medium: 2, hard: 3 };
-    const minDiff = Math.min(...failed.map(c => diffOrder[c.difficulty] || 2));
-    const easiest = failed.filter(c => (diffOrder[c.difficulty] || 2) === minDiff);
-    const randomCase = easiest[Math.floor(Math.random() * easiest.length)];
-    router.push(`/cases/${randomCase.id}`);
+  const resetFilters = () => {
+    setShowBasicOnly(false);
+    setResultFilter('all');
+    setSelectedDifficulty('all');
+    setSelectedCategory('all');
+    setSearchText('');
+    setSortOrder('number');
+    setSelectedDomains([...DOMAINS]);
   };
 
   const getDifficultyLabel = (d) => ({ easy: '易', medium: '中', hard: '難' }[d] || '中');
@@ -245,12 +282,16 @@ export default function CasesPage() {
   };
 
   // フィルターが適用されているかどうか
-  const isFiltered = showBasicOnly || selectedDifficulty !== 'all' || searchText;
+  const isFiltered = showBasicOnly || selectedDifficulty !== 'all' || searchText || !allDomainsSelected;
   // フィルターラベル（サマリーに表示）
   const filterLabel = [
     showBasicOnly ? '救急基本症例' : null,
     selectedDifficulty !== 'all' ? difficultyLabel[selectedDifficulty] : null,
+    !allDomainsSelected ? `領域${selectedDomains.length}件` : null,
   ].filter(Boolean).join(' · ');
+
+  // フィルターが初期状態から変更されているか（リセットボタン表示用）
+  const hasActiveFilter = showBasicOnly || resultFilter !== 'all' || selectedDifficulty !== 'all' || searchText || !allDomainsSelected || sortOrder !== 'number';
 
   if (loading || loadingCases) {
     return (
@@ -329,26 +370,27 @@ export default function CasesPage() {
           </div>
         )}
 
-        {/* ランダム選択ボタン */}
-        <div className="grid grid-cols-2 gap-3 mb-5">
-          <button onClick={handleRandomSelect} disabled={filteredCases.length === 0}
-            className="bg-blue-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-blue-700 disabled:opacity-40 transition">
-            🎲 ランダムに挑戦
-          </button>
-          <button onClick={handleRandomUnsolved} disabled={filteredCases.length === 0 || isTrialMode}
-            className="bg-indigo-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-indigo-700 disabled:opacity-40 transition">
-            🌟 未解答からランダム
-          </button>
-          <button onClick={handleRandomFailed} disabled={filteredCases.length === 0 || isTrialMode}
-            className="col-span-2 bg-orange-500 text-white py-3 rounded-xl font-bold text-sm hover:bg-orange-600 disabled:opacity-40 transition">
-            🔁 不合格からランダム
+        {/* ランダム選択ボタン（以下の絞り込み条件で抽出された症例から選択） */}
+        <div className="mb-5">
+          <button
+            onClick={handleRandomSelect}
+            disabled={filteredCases.length === 0}
+            className={`w-full py-3.5 rounded-xl font-bold text-sm transition ${
+              filteredCases.length === 0
+                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}
+          >
+            {filteredCases.length === 0
+              ? '😶 該当する症例がありません'
+              : `🎲 ランダムに挑戦（以下の条件で絞り込み・${filteredCases.length}件）`}
           </button>
         </div>
 
         {/* フィルターパネル */}
         <div className="bg-white rounded-xl shadow-sm p-4 mb-4 space-y-3">
 
-          {/* 検索 */}
+          {/* 検索（自由記入欄） */}
           <input
             type="text"
             placeholder="症例名・主訴・番号で検索..."
@@ -468,6 +510,51 @@ export default function CasesPage() {
             </div>
           )}
 
+          {/* 領域フィルター（複数選択チェックボックス） */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-xs text-gray-400 font-medium">
+                領域（{selectedDomains.length}/{DOMAINS.length}）
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={selectAllDomains}
+                  disabled={allDomainsSelected}
+                  className="text-xs text-blue-500 hover:text-blue-700 disabled:text-gray-300 disabled:cursor-default underline"
+                >
+                  すべて選択
+                </button>
+                <button
+                  onClick={clearDomains}
+                  disabled={selectedDomains.length === 0}
+                  className="text-xs text-gray-400 hover:text-gray-600 disabled:text-gray-200 disabled:cursor-default underline"
+                >
+                  クリア
+                </button>
+              </div>
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              {DOMAINS.map(d => {
+                const checked = selectedDomains.includes(d);
+                const count = domainCount(d);
+                return (
+                  <button
+                    key={d}
+                    onClick={() => toggleDomain(d)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition border ${
+                      checked
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'bg-white text-gray-500 border-gray-200'
+                    }`}
+                  >
+                    <span className="mr-1">{checked ? '☑' : '☐'}</span>
+                    {d}（{count}）
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* ソート */}
           <div>
             <p className="text-xs text-gray-400 font-medium mb-1.5">並び順</p>
@@ -483,16 +570,9 @@ export default function CasesPage() {
           {/* 件数表示 + フィルタークリア */}
           <div className="flex items-center justify-between pt-1">
             <p className="text-xs text-gray-400">{filteredCases.length}件表示</p>
-            {(showBasicOnly || resultFilter !== 'all' || selectedDifficulty !== 'all' || searchText) && (
+            {hasActiveFilter && (
               <button
-                onClick={() => {
-                  setShowBasicOnly(false);
-                  setResultFilter('all');
-                  setSelectedDifficulty('all');
-                  setSelectedCategory('all');
-                  setSearchText('');
-                  setSortOrder('number');
-                }}
+                onClick={resetFilters}
                 className="text-xs text-blue-500 hover:text-blue-700 underline"
               >
                 フィルターをリセット
@@ -544,16 +624,9 @@ export default function CasesPage() {
             <div className="text-center py-12 text-gray-400">
               <p className="text-4xl mb-3">📋</p>
               <p>該当する症例がありません</p>
-              {(resultFilter !== 'all' || selectedDifficulty !== 'all' || showBasicOnly || searchText) && (
+              {hasActiveFilter && (
                 <button
-                  onClick={() => {
-                    setShowBasicOnly(false);
-                    setResultFilter('all');
-                    setSelectedDifficulty('all');
-                    setSelectedCategory('all');
-                    setSearchText('');
-                    setSortOrder('number');
-                  }}
+                  onClick={resetFilters}
                   className="mt-3 text-sm text-blue-500 hover:text-blue-700 underline"
                 >
                   フィルターをリセットする
