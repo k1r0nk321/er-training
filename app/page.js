@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from './lib/auth-context';
 import { supabase } from './lib/supabase';
 import { ER_HERO_IMAGE } from './er-hero-image';
+import { ER_LOGIN_QR } from './er-login-qr';
 
 const ADMIN_EMAIL = 'nakamae@mub.biglobe.ne.jp';
 const ROLE_OPTIONS = [
@@ -70,11 +71,6 @@ export default function HomePage() {
   const [showSignupPw, setShowSignupPw] = useState(false);
   const [showSignupPwConfirm, setShowSignupPwConfirm] = useState(false);
 
-  const [trialPassword, setTrialPassword] = useState('');
-  const [trialError, setTrialError] = useState('');
-  const [trialPw, setTrialPw] = useState('');
-  const [showTrialPw, setShowTrialPw] = useState(false);
-
   // プロフィール編集
   const [editingProfile, setEditingProfile] = useState(false);
   const [editName, setEditName] = useState('');
@@ -106,7 +102,6 @@ export default function HomePage() {
 
   useEffect(() => {
     fetchAnnouncements();
-    fetchTrialPw();
     fetchAppUpdates();
   }, []);
 
@@ -127,15 +122,6 @@ export default function HomePage() {
       .order('created_at', { ascending: false })
       .limit(3);
     setAppUpdates(data || []);
-  };
-
-  const fetchTrialPw = async () => {
-    const { data } = await supabase
-      .from('app_settings')
-      .select('value')
-      .eq('key', 'trial_password')
-      .single();
-    if (data) setTrialPw(data.value);
   };
 
   const handleLogin = async (e) => {
@@ -171,12 +157,8 @@ export default function HomePage() {
   };
 
   const handleTrial = () => {
-    if (trialPassword === trialPw) {
-      sessionStorage.setItem('trial_mode', 'true');
-      router.push('/cases');
-    } else {
-      setTrialError('パスワードが違います。管理者にご確認ください。');
-    }
+    sessionStorage.setItem('trial_mode', 'true');
+    router.push('/cases');
   };
 
   const handleRegister = async (e) => {
@@ -277,8 +259,17 @@ export default function HomePage() {
           </button>
         </div>
         <p className="text-sm text-gray-600 leading-relaxed">
-          本アプリは、医仁会武田総合病院の臨床研修PG責任者が教育目的で作成しました。興味を持っていただいた方は、ぜひご見学をお待ちしています。
+          本アプリは、医仁会武田総合病院の臨床研修PG責任者が教育目的で作成しました。二次配布は自由です。興味を持っていただいた方は、ぜひご見学をお待ちしています。
         </p>
+        <div className="bg-gray-50 rounded-xl p-4 text-center">
+          <p className="text-xs font-bold text-gray-600 mb-2">📱 アプリのログインはこちら</p>
+          <img
+            src={ER_LOGIN_QR}
+            alt="ER Training ログイン用QRコード"
+            className="w-40 h-40 mx-auto rounded-lg bg-white p-1 shadow-sm"
+          />
+          <p className="text-[10px] text-gray-400 mt-2 break-all">https://er-training.vercel.app</p>
+        </div>
         <a
           href="https://www.takedahp.or.jp/ijinkai/recruit/trainee/"
           target="_blank"
@@ -824,25 +815,11 @@ export default function HomePage() {
         {mode === 'trial' && (
           <div className="bg-white rounded-2xl shadow-sm p-6 space-y-4">
             <h2 className="font-bold text-gray-700">お試しモード</h2>
-            <p className="text-xs text-gray-500">
-              共通パスワードで一部の症例のみ体験できます。成績は保存されません。<br />
-              パスワードは管理者にお問い合わせください。
+            <p className="text-xs text-gray-500 leading-relaxed">
+              お試しモードでは一部の症例のみ体験できます。成績は保存されません。気に入っていただけた方は、新規登録をお願いいたします。
             </p>
-            <div className="relative">
-              <input
-                type={showTrialPw ? 'text' : 'password'} value={trialPassword}
-                onChange={e => { setTrialPassword(e.target.value); setTrialError(''); }}
-                placeholder="共通パスワード"
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
-                onKeyDown={e => e.key === 'Enter' && handleTrial()} />
-              <button type="button" onClick={() => setShowTrialPw(v => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs px-1" tabIndex={-1}>
-                {showTrialPw ? '隠す' : '表示'}
-              </button>
-            </div>
-            {trialError && <p className="text-red-500 text-xs">{trialError}</p>}
-            <button onClick={handleTrial} disabled={!trialPassword}
-              className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-indigo-700 disabled:opacity-50 transition">
+            <button onClick={handleTrial}
+              className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-indigo-700 transition">
               体験する
             </button>
           </div>

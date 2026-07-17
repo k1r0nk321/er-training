@@ -119,10 +119,15 @@ export default function CasesPage() {
     if (error) {
       setError('症例の読み込みに失敗しました');
     } else {
-      // お試しモードは「救急基本症例集 かつ 難易度=易しい」の症例のみ体験可能
+      // お試しモードは「救急基本症例集 かつ 難易度=易しい かつ 領域=総合内科/循環器」の7例のみ体験可能
       const trial = sessionStorage.getItem('trial_mode') === 'true' && !user;
+      const TRIAL_DOMAINS = ['総合内科', '循環器'];
       const list = trial
-        ? (data || []).filter(c => c.is_basic === true && c.difficulty === 'easy')
+        ? (data || []).filter(c =>
+            c.is_basic === true &&
+            c.difficulty === 'easy' &&
+            TRIAL_DOMAINS.includes(getDomain(c.category))
+          )
         : (data || []);
       setCases(list);
     }
