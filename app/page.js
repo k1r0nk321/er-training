@@ -259,7 +259,7 @@ export default function HomePage() {
           </button>
         </div>
         <p className="text-sm text-gray-600 leading-relaxed">
-          本アプリは、医仁会武田総合病院の臨床研修PG責任者が教育目的で作成しました。二次配布は自由です。興味を持っていただいた方は、ぜひご見学をお待ちしています。
+          本アプリは、医仁会武田総合病院の臨床研修PG/総合診療PG責任者が教育目的で作成しました。二次配布は自由です。興味を持っていただいた方は、ぜひご見学をお待ちしています。
         </p>
         <div className="bg-gray-50 rounded-xl p-4 text-center">
           <p className="text-xs font-bold text-gray-600 mb-2">📱 アプリのログインはこちら</p>
@@ -277,6 +277,14 @@ export default function HomePage() {
           className="block w-full text-center bg-blue-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-blue-700 transition"
         >
           研修医募集ページを見る →
+        </a>
+        <a
+          href="https://www.takedahp.or.jp/ijinkai/recruit/specialist/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block w-full text-center bg-blue-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-blue-700 transition"
+        >
+          専攻医募集ページを見る →
         </a>
         <button
           onClick={() => setShowAbout(false)}
