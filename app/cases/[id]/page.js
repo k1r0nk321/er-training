@@ -3,7 +3,6 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '../../lib/auth-context';
 import { supabase } from '../../lib/supabase';
-import { ER_HERO_IMAGE } from '../../er-hero-image';
 // フェーズ定義
 // 'info' → 'interview'（問診＋鑑別診断） → 'workup' → 'diagnosis' → 'result'
 // 検査リスト定義
@@ -61,8 +60,6 @@ export default function CaseDetailPage() {
   const [loadingCase, setLoadingCase] = useState(true);
   const [error, setError] = useState('');
   const [phase, setPhase] = useState('info');
-  // 患者入室パネルに表示する担当医（トップ画像の2人の研修医からランダムに1人）
-  const [doctorLeft] = useState(() => Math.random() < 0.5);
   // ===== 問診チャット =====
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
@@ -121,15 +118,13 @@ export default function CaseDetailPage() {
   }, [user, caseId]);
   useEffect(() => {
     if (messages.length === 0) return;
-    const last = messages[messages.length - 1];
-    if (last.role === 'patient') {
-      // AI返答時：「問診・診察ルーム」ヘッダーが画面最上端に来るようスクロール
-      setTimeout(() => {
-        chatRoomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 50);
-    } else {
-      chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
+    // 送信時・AI返答時とも「問診・診察ルーム」を画面最上部に固定表示する。
+    // 最新メッセージへの追従はチャット枠内のスクロールのみで行い、ウィンドウは下へ動かさない。
+    setTimeout(() => {
+      chatRoomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const box = chatBottomRef.current?.parentElement;
+      if (box) box.scrollTop = box.scrollHeight;
+    }, 50);
   }, [messages]);
   const fetchCase = async () => {
     setLoadingCase(true);
@@ -453,6 +448,7 @@ ${differentials.filter(d => d.trim()).map((d, i) => `${i + 1}. ${d}`).join('\n')
 - 治療方針・治療薬・診断基準（スコアリングシステム等）への言及は採点対象外です
 - 治療や診断基準については、採点後のteaching_pointで「知識として」補足してください
 - 減点は問診・検査選択・鑑別・最終診断の質にのみ基づいてください
+- 【ステップ境界の厳守（最重要）】各判断は「そのステップまでに得られた情報のみ」で妥当性を評価すること。後のステップで判明した情報を根拠に前段の判断を批判・減点してはならない。具体的には、Step1の判断はStep1情報のみで、Step2の問診・鑑別はStep1＋Step2情報のみで評価する。Step3の検査結果（採血・心電図・画像・心エコー・造影CT・培養など）を用いてStep2までの鑑別診断や問診を評価・批判することは絶対に禁止する。検査結果を使ってよいのは最終診断(final_diagnosis)の評価のみである
 - 【Step1提示情報は確認済みとして扱う】Step1（症例確認フェーズ）で研修医に提示された情報（主訴・現病歴・既往歴・バイタルサイン・背景情報）は、研修医がすでに確認済みとして扱うこと。Step2の問診でこれらを再確認しなかったことを減点してはならない。Step2では「Step1で得られなかった追加情報」を引き出す質問・診察を評価する
 【鑑別診断の評価方針（最重要）】
 - 鑑別診断の評価は「Step1の症例情報（バイタル・主訴・現病歴・初期検査）とStep2の問診・診察」の情報のみに基づいて行うこと
@@ -460,6 +456,8 @@ ${differentials.filter(d => d.trim()).map((d, i) => `${i + 1}. ${d}`).join('\n')
 - 例：心電図でVTが確認されても、その情報は鑑別診断の評価に使ってはならない。Step1・Step2の情報から鑑別診断としてVT・不整脈を挙げていれば適切と評価する
 - 鑑別診断の順位（第何位か）も、Step1・Step2時点の情報から見て妥当かどうかで判断する。検査結果判明後の視点で「なぜ第一位にしなかったか」と批判してはならない
 - 最終診断と鑑別診断の一致度を論評する際も、検査前の時点での思考過程として評価すること
+- 【文面への適用】この方針は breakdown の点数だけでなく、comment・improvement・good_points・interview_feedback など全ての出力文にも適用する。いかなるフィードバック文でも、検査結果を引き合いに鑑別診断や問診を否定・批判してはならない
+- 禁止例：「心エコーでTRPG正常であり肺高血圧症の根拠不十分」「心電図でVTが確認されたのに鑑別に挙げていない」のように、Step3の検査所見を根拠に鑑別を評価する記述は一切書かない。鑑別の妥当性はStep1・Step2の症状・身体所見・初期検査のみから論じること
 【症例】タイトル：${caseData.title}、正解の診断：${caseData.answer_diagnosis || ''}
 採点基準：${caseData.scoring_criteria || '総合的に判断'}
 【研修医の問診記録（Step2）】
@@ -480,11 +478,11 @@ ${finalDiagnosis}
     "differential": 25,
     "final_diagnosis": 25
   },
-  "comment": "全体フィードバック200字以内（診断過程のみ評価・治療への言及は不要）",
+  "comment": "全体フィードバック200字以内（診断過程のみ評価・治療への言及は不要。Step3の検査結果を根拠に鑑別診断や問診を批判しないこと）",
   "interview_feedback": "問診の質1〜2文。Step1で已に提示された情報（主訴・現病歴・既往歴・バイタルサイン・背景情報）はすでに確認済みとして扱い、Step2で再確認しなかったことは減点しないこと。評価は、Step2で新たに引き出した情報（症状の詳細・伴同症状・誰による冒文かどうか・綺当・再現履歴・身体診察所見等）に對して行うこと。またStep2で聞かれなかった重要情報があれば指摘する",
   "workup_feedback": "検査選択の適切さ1〜2文",
   "good_points": "よかった点1〜2文",
-  "improvement": "診断過程における改善点1〜2文",
+  "improvement": "診断過程における改善点1〜2文（Step2までの情報のみに基づく。検査結果を根拠に鑑別が不十分だったと述べる批判は禁止）",
   "teaching_point": "【Teaching Point】\n本症例で研修医が理解できていなかった点・間違えた点を中心に、以下の3点を詳細に解説してください（各100〜150字）。なお、一般的でない医学略語を使う場合は必ず英語のフルスペルと日本語訳を括弧内に記載してください（例：DVT（Deep Vein Thrombosis：深部静脈血栓症））：\n①診断の核心：この疾患を診断するうえで最も重要な思考プロセスや見落としがちな点\n②検査・問診の要点：適切な問診・検査選択のポイントと、研修医が不足していた観点\n③臨床的知識：治療方針・診断基準・類似疾患との鑑別など、この症例で知っておくべき実践的知識"
 }`;
     try {
@@ -816,31 +814,15 @@ ${finalDiagnosis}
                 <p className="text-sm text-yellow-800 whitespace-pre-wrap">{interviewHint}</p>
               </div>
             )}
-            <div ref={chatRoomRef} className="bg-white rounded-xl shadow-sm overflow-hidden">
+            <div ref={chatRoomRef} className="bg-white rounded-xl shadow-sm overflow-hidden scroll-mt-14">
               <div className="bg-gray-800 px-4 py-2 flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-red-400"></div>
                 <div className="w-2 h-2 rounded-full bg-yellow-400"></div>
                 <div className="w-2 h-2 rounded-full bg-green-400"></div>
                 <span className="text-xs text-gray-300 ml-2">問診・診察ルーム</span>
               </div>
+              {messages.length > 0 && (
               <div className="h-72 overflow-y-auto p-4 space-y-3 bg-gray-50">
-                {messages.length === 0 && (
-                  <div className="text-center mt-6">
-                    <div
-                      className="w-28 h-28 rounded-full mx-auto mb-3 shadow-md ring-4 ring-white bg-gray-100"
-                      style={{
-                        backgroundImage: `url(${ER_HERO_IMAGE})`,
-                        backgroundSize: '290%',
-                        backgroundPosition: doctorLeft ? '30% 30%' : '72% 33%',
-                        backgroundRepeat: 'no-repeat',
-                      }}
-                      role="img"
-                      aria-label="担当医"
-                    />
-                    <p className="text-sm font-bold text-gray-700">担当医が診察を始めます</p>
-                    <p className="text-xs mt-1 text-gray-400">下の入力欄に問診・診察の指示を入力してください</p>
-                  </div>
-                )}
                 {messages.map((m, i) => (
                   <div key={i} data-msg={i} className={`flex ${m.role === 'resident' ? 'justify-end' : 'justify-start'}`}>
                     <div className={`max-w-xs px-4 py-2.5 rounded-2xl text-sm ${m.role === 'resident' ? 'bg-blue-600 text-white rounded-br-sm' : 'bg-white text-gray-800 shadow-sm rounded-bl-sm border border-gray-100'}`}>
@@ -864,21 +846,9 @@ ${finalDiagnosis}
                 )}
                 <div ref={chatBottomRef}></div>
               </div>
+              )}
               <div className="p-3 border-t border-gray-100 bg-white">
                 <p className="text-xs font-bold text-gray-700 mb-1.5">🩺 問診・診察の指示を入力してください</p>
-                <div className="flex flex-wrap gap-1.5 mb-2">
-                  {['いつから症状がありますか？', '痛みの程度は？', '随伴症状はありますか？', '腹部を診察させてください'].map(ex => (
-                    <button
-                      key={ex}
-                      type="button"
-                      onClick={() => setInputText(ex)}
-                      disabled={chatLoading}
-                      className="text-xs bg-indigo-50 text-indigo-600 border border-indigo-200 rounded-full px-2.5 py-1 hover:bg-indigo-100 disabled:opacity-40 transition"
-                    >
-                      ＋ {ex}
-                    </button>
-                  ))}
-                </div>
                 <div className="flex gap-2 items-end">
                   <textarea
                     value={inputText}
@@ -894,7 +864,7 @@ ${finalDiagnosis}
                     送信 ▶
                   </button>
                 </div>
-                <p className="text-xs text-gray-400 mt-1">💬 上の例をタップして入力できます・Enter で送信 / Shift+Enter で改行</p>
+                <p className="text-xs text-gray-400 mt-1">Enter で送信 / Shift+Enter で改行</p>
               </div>
             </div>
             <button onClick={handleGetCoaching} disabled={coachingLoading || messages.length === 0}
