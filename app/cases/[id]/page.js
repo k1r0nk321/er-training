@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '../../lib/auth-context';
 import { supabase } from '../../lib/supabase';
+import { ER_HERO_IMAGE } from '../../er-hero-image';
 // フェーズ定義
 // 'info' → 'interview'（問診＋鑑別診断） → 'workup' → 'diagnosis' → 'result'
 // 検査リスト定義
@@ -24,16 +25,24 @@ const EXAM_LIST = [
 ];
 const EXAM_CATEGORIES = ['血液', '生理', '画像', 'CT', 'MRI'];
 // ===== アコーディオンコンポーネント =====
-function InfoAccordion({ title, children, defaultOpen = false }) {
+// ステップごとの配色（タブとアコーディオン・パネルで統一）
+const STEP_THEME = {
+  gray:   { head: 'bg-gray-50 hover:bg-gray-100', text: 'text-gray-600', border: 'border-gray-200' },
+  blue:   { head: 'bg-blue-50 hover:bg-blue-100', text: 'text-blue-700', border: 'border-blue-200' },
+  purple: { head: 'bg-purple-50 hover:bg-purple-100', text: 'text-purple-700', border: 'border-purple-200' },
+  indigo: { head: 'bg-indigo-50 hover:bg-indigo-100', text: 'text-indigo-700', border: 'border-indigo-200' },
+};
+function InfoAccordion({ title, children, defaultOpen = false, color = 'gray' }) {
   const [open, setOpen] = useState(defaultOpen);
+  const t = STEP_THEME[color] || STEP_THEME.gray;
   return (
-    <div className="border border-gray-200 rounded-xl overflow-hidden">
+    <div className={`border ${t.border} rounded-xl overflow-hidden`}>
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition text-left"
+        className={`w-full flex items-center justify-between px-4 py-3 ${t.head} transition text-left`}
       >
-        <span className="text-sm font-bold text-gray-600">{title}</span>
-        <span className={`text-gray-400 text-xs transition-transform ${open ? 'rotate-180' : ''}`}>▼</span>
+        <span className={`text-sm font-bold ${t.text}`}>{title}</span>
+        <span className={`${t.text} opacity-60 text-xs transition-transform ${open ? 'rotate-180' : ''}`}>▼</span>
       </button>
       {open && (
         <div className="px-4 py-3 bg-white">
@@ -52,6 +61,8 @@ export default function CaseDetailPage() {
   const [loadingCase, setLoadingCase] = useState(true);
   const [error, setError] = useState('');
   const [phase, setPhase] = useState('info');
+  // 患者入室パネルに表示する担当医（トップ画像の2人の研修医からランダムに1人）
+  const [doctorLeft] = useState(() => Math.random() < 0.5);
   // ===== 問診チャット =====
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
@@ -521,7 +532,9 @@ ${finalDiagnosis}
     hard: 'bg-red-100 text-red-700',
   }[d] || 'bg-gray-100 text-gray-600');
   const getDifficultyLabel = (d) => ({ easy: '易', medium: '中', hard: '難' }[d] || '中');
-  const phaseLabels = ['症例確認', '問診・診察・鑑別', '精査・検査・最終診断'];
+  const phaseLabels = ['Step1 救急隊情報', 'Step2 来院時現症', 'Step3 検査・最終診断'];
+  const phaseColors = ['blue', 'purple', 'indigo'];
+  const phaseActiveCls = { blue: 'bg-blue-600 text-white', purple: 'bg-purple-600 text-white', indigo: 'bg-indigo-600 text-white' };
   const phaseOrder = ['info', 'interview', 'workup'];
   const currentIdx = phaseOrder.indexOf(phase);
   const resetAll = () => {
@@ -685,7 +698,7 @@ ${finalDiagnosis}
               const isDone = i < currentIdx;
               return (
                 <div key={i} className="flex items-center gap-1 flex-1">
-                  <div className={`w-full text-center text-xs py-1 rounded font-medium transition ${isActive ? 'bg-blue-600 text-white' : isDone ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
+                  <div className={`w-full text-center text-xs py-1 rounded font-medium transition ${isActive ? phaseActiveCls[phaseColors[i]] : isDone ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
                     {isDone ? '✓ ' : ''}{label}
                   </div>
                   {i < 2 && <span className="text-gray-300 text-xs">›</span>}
@@ -757,7 +770,7 @@ ${finalDiagnosis}
         {/* ===== Step2：問診・診察 ===== */}
         {phase === 'interview' && (
           <>
-            <InfoAccordion title="📋 Step1：症例情報を確認する" defaultOpen={false}>
+            <InfoAccordion title="📋 Step1：救急隊情報を確認する" defaultOpen={false} color="blue">
               {caseData.vital_signs && (
                 <div className="mb-3">
                   <p className="text-xs font-bold text-red-600 mb-1">🚨 バイタルサイン</p>
@@ -812,10 +825,20 @@ ${finalDiagnosis}
               </div>
               <div className="h-72 overflow-y-auto p-4 space-y-3 bg-gray-50">
                 {messages.length === 0 && (
-                  <div className="text-center text-gray-400 text-sm mt-8">
-                    <p className="text-3xl mb-2">🏥</p>
-                    <p>患者が入室しました。</p>
-                    <p className="text-xs mt-1">問診や診察の指示を入力してください。</p>
+                  <div className="text-center mt-6">
+                    <div
+                      className="w-28 h-28 rounded-full mx-auto mb-3 shadow-md ring-4 ring-white bg-gray-100"
+                      style={{
+                        backgroundImage: `url(${ER_HERO_IMAGE})`,
+                        backgroundSize: '290%',
+                        backgroundPosition: doctorLeft ? '30% 30%' : '72% 33%',
+                        backgroundRepeat: 'no-repeat',
+                      }}
+                      role="img"
+                      aria-label="担当医"
+                    />
+                    <p className="text-sm font-bold text-gray-700">担当医が診察を始めます</p>
+                    <p className="text-xs mt-1 text-gray-400">下の入力欄に問診・診察の指示を入力してください</p>
                   </div>
                 )}
                 {messages.map((m, i) => (
@@ -842,27 +865,41 @@ ${finalDiagnosis}
                 <div ref={chatBottomRef}></div>
               </div>
               <div className="p-3 border-t border-gray-100 bg-white">
-                <div className="flex gap-2">
+                <p className="text-xs font-bold text-gray-700 mb-1.5">🩺 問診・診察の指示を入力してください</p>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {['いつから症状がありますか？', '痛みの程度は？', '随伴症状はありますか？', '腹部を診察させてください'].map(ex => (
+                    <button
+                      key={ex}
+                      type="button"
+                      onClick={() => setInputText(ex)}
+                      disabled={chatLoading}
+                      className="text-xs bg-indigo-50 text-indigo-600 border border-indigo-200 rounded-full px-2.5 py-1 hover:bg-indigo-100 disabled:opacity-40 transition"
+                    >
+                      ＋ {ex}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-2 items-end">
                   <textarea
                     value={inputText}
                     onChange={e => setInputText(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
-                    placeholder={"問診例：いつから痛いですか？\n診察例：腹部を触らせてください"}
-                    rows={3}
-                    className="flex-1 border-2 border-indigo-200 bg-indigo-50 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:bg-white resize-none placeholder-indigo-300"
+                    placeholder="質問や診察の指示を入力（例：いつから痛みますか？ / お腹を触診させてください）"
+                    rows={2}
+                    className="flex-1 border-2 border-indigo-300 bg-indigo-50 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:bg-white resize-none placeholder-gray-400"
                     disabled={chatLoading}
                   />
                   <button onClick={handleSendMessage} disabled={!inputText.trim() || chatLoading}
-                    className="bg-blue-600 text-white px-4 rounded-xl font-bold text-sm hover:bg-blue-700 disabled:opacity-40 transition flex-shrink-0">
-                    送信
+                    className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-indigo-700 disabled:opacity-40 transition flex-shrink-0">
+                    送信 ▶
                   </button>
                 </div>
-                <p className="text-xs text-gray-400 mt-1">Enter で送信 / Shift+Enter で改行</p>
+                <p className="text-xs text-gray-400 mt-1">💬 上の例をタップして入力できます・Enter で送信 / Shift+Enter で改行</p>
               </div>
             </div>
             <button onClick={handleGetCoaching} disabled={coachingLoading || messages.length === 0}
               className="w-full border border-purple-400 text-purple-600 py-3 rounded-xl font-bold text-sm hover:bg-purple-50 disabled:opacity-40 transition">
-              {coachingLoading ? '指導コメント取得中...' : '👨‍⚕️ 指導医からコメントをもらう（任意）'}
+              {coachingLoading ? '指導コメント取得中...' : '👨‍⚕️ 指導医からコメントをもらう（採点結果に影響なし）'}
             </button>
             {showCoaching && interviewCoaching && (
               <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
@@ -880,7 +917,7 @@ ${finalDiagnosis}
               disabled={differentialHintLoading}
               className="w-full border border-yellow-400 text-yellow-700 bg-yellow-50 py-2.5 rounded-xl font-bold text-sm hover:bg-yellow-100 disabled:opacity-40 transition flex items-center justify-center gap-2"
             >
-              {differentialHintLoading ? '🔍 ヒント取得中...' : '💡 鑑別診断のヒントを見る'}
+              {differentialHintLoading ? '🔍 ヒント取得中...' : '💡 鑑別診断のヒントを見る（ヒントを見た後の入力情報は採点対象外）'}
             </button>
             {showDifferentialHint && differentialHint && (
               <div className="bg-yellow-50 border border-yellow-300 rounded-xl p-4">
@@ -921,7 +958,7 @@ ${finalDiagnosis}
         {/* ===== Step3：精査・検査 ===== */}
         {phase === 'workup' && (
           <>
-            <InfoAccordion title="📋 Step1：症例情報を確認する" defaultOpen={false}>
+            <InfoAccordion title="📋 Step1：救急隊情報を確認する" defaultOpen={false} color="blue">
               {caseData.vital_signs && (
                 <div className="mb-3">
                   <p className="text-xs font-bold text-red-600 mb-1">🚨 バイタルサイン</p>
@@ -941,7 +978,7 @@ ${finalDiagnosis}
                 </div>
               )}
             </InfoAccordion>
-            <InfoAccordion title="🗣️ Step2：問診・診察の記録を確認する" defaultOpen={false}>
+            <InfoAccordion title="🗣️ Step2：問診・診察の記録を確認する" defaultOpen={false} color="purple">
               {messages.length > 0 ? (
                 <div className="space-y-2">
                   {messages.map((m, i) => (
@@ -1063,7 +1100,7 @@ ${finalDiagnosis}
                   disabled={workupCoachingLoading}
                   className="w-full border border-purple-400 text-purple-600 py-3 rounded-xl font-bold text-sm hover:bg-purple-50 disabled:opacity-40 transition"
                 >
-                  {workupCoachingLoading ? '指導コメント取得中...' : '👨‍⚕️ 指導医からコメントをもらう（任意）'}
+                  {workupCoachingLoading ? '指導コメント取得中...' : '👨‍⚕️ 指導医からコメントをもらう（採点結果に影響なし）'}
                 </button>
                 {showWorkupCoaching && workupCoaching && (
                   <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
