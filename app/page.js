@@ -286,6 +286,22 @@ export default function HomePage() {
         >
           専攻医募集ページを見る →
         </a>
+        <a
+          href="https://www.takedahp.or.jp/ijinkai/news/7487/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block w-full text-center bg-orange-500 text-white py-3 rounded-xl font-bold text-sm hover:bg-orange-600 transition"
+        >
+          オンライン救急症例検討会のご案内 →
+        </a>
+        <a
+          href="https://www.takedahp.or.jp/ijinkai/recruit/tour/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block w-full text-center bg-purple-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-purple-700 transition"
+        >
+          病院見学のお申込み →
+        </a>
         <button
           onClick={() => setShowAbout(false)}
           className="w-full text-xs text-gray-400 hover:text-gray-600 py-1"
