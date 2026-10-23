@@ -1,6 +1,32 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { createClient } from '@supabase/supabase-js';
+import { getAuthedUser } from '../../lib/auth-server';
+
+const TRIAL_CALL_CAP = 30;
 
 export async function POST(req) {
+                const user = await getAuthedUser(req);
+                if (!user) {
+                                    const trialToken = req.headers.get('x-trial-token');
+                                    if (!trialToken) {
+                                                        return Response.json({ error: 'ログインまたはお試しモードの開始が必要です' }, { status: 401 });
+                                    }
+                                    const supabase = createClient(
+                                                        process.env.NEXT_PUBLIC_SUPABASE_URL,
+                                                        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+                                    );
+                                    const { data: ok, error: trialError } = await supabase.rpc('consume_trial_call', {
+                                                        p_token: trialToken,
+                                                        p_cap: TRIAL_CALL_CAP,
+                                    });
+                                    if (trialError || !ok) {
+                                                        return Response.json(
+                                                                            { error: 'お試しモードの利用回数上限、または有効期限に達しました。新規登録してご利用ください。' },
+                                                                            { status: 429 }
+                                                        );
+                                    }
+                }
+
                 try {
                                     const { prompt } = await req.json();
 

@@ -86,6 +86,8 @@ export default function HomePage() {
   const [regDepartment, setRegDepartment] = useState('');
   const [regLoading, setRegLoading] = useState(false);
   const [regError, setRegError] = useState('');
+  const [trialError, setTrialError] = useState('');
+  const [trialLoading, setTrialLoading] = useState(false);
   const [termsAgreed, setTermsAgreed] = useState(false);
   const [showTerms, setShowTerms] = useState(false);
 
@@ -156,9 +158,24 @@ export default function HomePage() {
     setSignupLoading(false);
   };
 
-  const handleTrial = () => {
-    sessionStorage.setItem('trial_mode', 'true');
-    router.push('/cases');
+  const handleTrial = async () => {
+    setTrialError('');
+    setTrialLoading(true);
+    try {
+      const res = await fetch('/api/trial', { method: 'POST' });
+      const data = await res.json();
+      if (!data?.token) {
+        setTrialError(data?.error || 'お試しの開始に失敗しました。しばらくしてから再度お試しください。');
+        setTrialLoading(false);
+        return;
+      }
+      sessionStorage.setItem('trial_token', data.token);
+      sessionStorage.setItem('trial_mode', 'true');
+      router.push('/cases');
+    } catch (e) {
+      setTrialError('お試しの開始に失敗しました。しばらくしてから再度お試しください。');
+      setTrialLoading(false);
+    }
   };
 
   const handleRegister = async (e) => {
@@ -842,9 +859,10 @@ export default function HomePage() {
             <p className="text-xs text-gray-500 leading-relaxed">
               お試しモードでは一部の症例のみ体験できます。成績は保存されません。気に入っていただけた方は、新規登録をお願いいたします。
             </p>
-            <button onClick={handleTrial}
-              className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-indigo-700 transition">
-              体験する
+            {trialError && <p className="text-xs text-red-600">{trialError}</p>}
+            <button onClick={handleTrial} disabled={trialLoading}
+              className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-indigo-700 transition disabled:opacity-60">
+              {trialLoading ? '準備中…' : '体験する'}
             </button>
           </div>
         )}

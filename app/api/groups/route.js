@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { getAuthedUser } from '../../lib/auth-server';
 
 function getAdminClient() {
   return createClient(
@@ -17,12 +18,14 @@ function generateInviteCode() {
 }
 
 export async function POST(req) {
-  try {
-    const { action, userId, groupName, inviteCode, groupId } = await req.json();
+  const authedUser = await getAuthedUser(req);
+  if (!authedUser) {
+    return Response.json({ error: 'ログインが必要です' }, { status: 401 });
+  }
+  const userId = authedUser.id;
 
-    if (!userId) {
-      return Response.json({ error: 'ユーザーIDが必要です' }, { status: 400 });
-    }
+  try {
+    const { action, groupName, inviteCode, groupId } = await req.json();
 
     const supabase = getAdminClient();
 
@@ -113,6 +116,12 @@ export async function POST(req) {
       const { data: group } = await supabase.from('groups').select('*').eq('id', groupId).single();
       if (!group) {
         return Response.json({ error: 'グループが見つかりません' }, { status: 404 });
+      }
+
+      const { data: myMembership } = await supabase
+        .from('group_members').select('id').eq('group_id', groupId).eq('user_id', userId).maybeSingle();
+      if (!myMembership) {
+        return Response.json({ error: 'このグループのメンバーではありません' }, { status: 403 });
       }
 
       const { data: memberRows } = await supabase.from('group_members').select('user_id, joined_at').eq('group_id', groupId);
