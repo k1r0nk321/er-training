@@ -2,8 +2,6 @@ import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@supabase/supabase-js';
 import { getAuthedUser } from '../../lib/auth-server';
 
-const TRIAL_CALL_CAP = 30;
-
 export async function POST(req) {
                 const user = await getAuthedUser(req);
                 if (!user) {
@@ -11,13 +9,14 @@ export async function POST(req) {
                                     if (!trialToken) {
                                                         return Response.json({ error: 'ログインまたはお試しモードの開始が必要です' }, { status: 401 });
                                     }
+                                    // consume_trial_callはservice_roleのみ実行可能（anon/authenticatedから
+                                    // 直接呼んでp_capを上書きされたり、トークンなしで突破されたりするのを防ぐ）。
                                     const supabase = createClient(
                                                         process.env.NEXT_PUBLIC_SUPABASE_URL,
-                                                        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+                                                        process.env.SUPABASE_SERVICE_ROLE_KEY
                                     );
                                     const { data: ok, error: trialError } = await supabase.rpc('consume_trial_call', {
                                                         p_token: trialToken,
-                                                        p_cap: TRIAL_CALL_CAP,
                                     });
                                     if (trialError || !ok) {
                                                         return Response.json(
