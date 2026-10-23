@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '../../lib/auth-context';
 import { supabase } from '../../lib/supabase';
+import { authedFetch } from '../../lib/authed-fetch';
 // フェーズ定義
 // 'info' → 'interview'（問診＋鑑別診断） → 'workup' → 'diagnosis' → 'result'
 // 検査リスト定義
@@ -177,11 +178,7 @@ export default function CaseDetailPage() {
 ${conversationHistory}
 研修医の最新の質問/指示に対して患者/家族として返答してください：`;
     try {
-      const response = await fetch('/api/score', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt }),
-      });
+      const response = await authedFetch('/api/score', { prompt });
       const data = await response.json();
       setMessages(prev => [...prev, { role: 'patient', text: data.text || data.content || '（回答を取得できませんでした）' }]);
     } catch {
@@ -207,11 +204,7 @@ ${conversationHistory}
 2. まだ聞けていない重要な点（もしあれば）
 ※検査・処置・診断についてのアドバイスや次のステップの提案は一切しないこと。`;
     try {
-      const response = await fetch('/api/score', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt }),
-      });
+      const response = await authedFetch('/api/score', { prompt });
       const data = await response.json();
       setInterviewCoaching(data.text || data.content || '');
     } catch {
@@ -235,11 +228,7 @@ ${conversationHistory}
 - 100字以内でコンパクトに
 - 具体的な検査・治療には触れないこと`;
     try {
-      const response = await fetch('/api/score', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt }),
-      });
+      const response = await authedFetch('/api/score', { prompt });
       const data = await response.json();
       setInterviewHint(data.text || data.content || '');
     } catch {
@@ -265,11 +254,7 @@ ${conversationHistory}
 - 「must not miss」の観点は臓器カテゴリ・病態カテゴリのみで表現すること（例：「循環器系の緊急性」「神経系への波及」）
 - 100字以内でコンパクトに`;
     try {
-      const response = await fetch('/api/score', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt }),
-      });
+      const response = await authedFetch('/api/score', { prompt });
       const data = await response.json();
       setDifferentialHint(data.text || data.content || '');
     } catch {
@@ -338,11 +323,7 @@ ${Object.keys(examResults).length > 0
 }
 注意：値の中に改行・ダブルクォート・バックスラッシュを含めないこと。血液ガスは「pH 7.32、PaO2 58mmHg、PaCO2 52mmHg、HCO3 24mEq/L、BE -2」のように1行で記載すること。`;
     try {
-      const response = await fetch('/api/score', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt }),
-      });
+      const response = await authedFetch('/api/score', { prompt });
       const data = await response.json();
       const raw = (data.text || data.content || '').replace(/```json|```/g, '').trim();
       let parsed = { results: {} };
@@ -387,11 +368,7 @@ ${resultSummary || '（なし）'}
 2. 選択しておくべきだった検査（もしあれば）
 ※次に何をすべきか・診断名・治療方針についてのアドバイスは一切しないこと。`;
     try {
-      const response = await fetch('/api/score', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt }),
-      });
+      const response = await authedFetch('/api/score', { prompt });
       const data = await response.json();
       setWorkupCoaching(data.text || data.content || '');
     } catch {
@@ -413,11 +390,7 @@ ${differentials.filter(d => d.trim()).map((d, i) => `${i + 1}. ${d}`).join('\n')
 - 見落としていると思われる重要な鑑別（もしあれば1〜2つ）
 ※次のステップで何をすべきかのアドバイスや、検査・処置の提案は一切しないこと。`;
     try {
-      const response = await fetch('/api/score', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt }),
-      });
+      const response = await authedFetch('/api/score', { prompt });
       const data = await response.json();
       setAiAnalysis(data.text || data.content || '');
       setAnalysisDone(true);
@@ -486,11 +459,7 @@ ${finalDiagnosis}
   "teaching_point": "【Teaching Point】\n本症例で研修医が理解できていなかった点・間違えた点を中心に、以下の3点を詳細に解説してください（各100〜150字）。なお、一般的でない医学略語を使う場合は必ず英語のフルスペルと日本語訳を括弧内に記載してください（例：DVT（Deep Vein Thrombosis：深部静脈血栓症））：\n①診断の核心：この疾患を診断するうえで最も重要な思考プロセスや見落としがちな点\n②検査・問診の要点：適切な問診・検査選択のポイントと、研修医が不足していた観点\n③臨床的知識：治療方針・診断基準・類似疾患との鑑別など、この症例で知っておくべき実践的知識"
 }`;
     try {
-      const response = await fetch('/api/score', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt }),
-      });
+      const response = await authedFetch('/api/score', { prompt });
       const data = await response.json();
       const text = (data.text || data.content || '').replace(/```json|```/g, '').trim();
       const parsed = JSON.parse(text);

@@ -3,8 +3,7 @@
 
 ## このファイルの中身
 - `app/` → アプリの本体
-- `app/api/ai/route.js` → AIとのやりとりをするサーバー側プログラム
-- `app/App.js` → 画面の見た目
+- `app/api/score/route.js` → AIとのやりとりをするサーバー側プログラム
 - `package.json` → 必要なプログラムのリスト
 
 ---

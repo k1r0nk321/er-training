@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '../../lib/auth-context';
+import { authedFetch } from '../../lib/authed-fetch';
 
 export default function GroupDetailPage() {
   const { user } = useAuth();
@@ -25,11 +26,7 @@ export default function GroupDetailPage() {
   async function fetchGroupDetail() {
     setLoading(true);
     try {
-      const res = await fetch('/api/groups', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'detail', userId: user.id, groupId: id }),
-      });
+      const res = await authedFetch('/api/groups', { action: 'detail', groupId: id });
       const data = await res.json();
       if (data.error || !data.group) {
         router.push('/groups');
@@ -46,11 +43,7 @@ export default function GroupDetailPage() {
   async function handleLeave() {
     setProcessing(true);
     try {
-      const res = await fetch('/api/groups', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'leave', userId: user.id, groupId: id }),
-      });
+      const res = await authedFetch('/api/groups', { action: 'leave', groupId: id });
       const data = await res.json();
       if (data.error) {
         setMessage(data.error);

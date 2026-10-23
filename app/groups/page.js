@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../lib/auth-context';
+import { authedFetch } from '../lib/authed-fetch';
 
 export default function GroupsPage() {
   const { user } = useAuth();
@@ -29,11 +30,7 @@ export default function GroupsPage() {
   async function fetchMyGroups() {
     setLoading(true);
     try {
-      const res = await fetch('/api/groups', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'list', userId: user.id }),
-      });
+      const res = await authedFetch('/api/groups', { action: 'list' });
       const data = await res.json();
       setMyGroups(data.groups || []);
     } catch (e) {
@@ -47,11 +44,7 @@ export default function GroupsPage() {
     setCreating(true);
     setMessage('');
     try {
-      const res = await fetch('/api/groups', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'create', userId: user.id, groupName: newGroupName }),
-      });
+      const res = await authedFetch('/api/groups', { action: 'create', groupName: newGroupName });
       const data = await res.json();
       if (data.error) {
         setMessage(data.error);
@@ -72,11 +65,7 @@ export default function GroupsPage() {
     setJoining(true);
     setMessage('');
     try {
-      const res = await fetch('/api/groups', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'join', userId: user.id, inviteCode: joinCode }),
-      });
+      const res = await authedFetch('/api/groups', { action: 'join', inviteCode: joinCode });
       const data = await res.json();
       if (data.error) {
         setMessage(data.error);
