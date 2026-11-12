@@ -64,11 +64,6 @@ export default function AdminPage() {
   const [updatingDifficulty, setUpdatingDifficulty] = useState({});
   const [diffMessage, setDiffMessage] = useState('');
 
-  const [currentTrialPw, setCurrentTrialPw] = useState('');
-  const [newTrialPw, setNewTrialPw] = useState('');
-  const [pwLoading, setPwLoading] = useState(false);
-  const [pwMessage, setPwMessage] = useState('');
-
   // ===== 2段階認証（管理者画面のみ） =====
   const [mfaStatus, setMfaStatus] = useState('checking'); // checking | need_enroll | need_challenge | verified
   const [mfaFactorId, setMfaFactorId] = useState(null);
@@ -181,21 +176,18 @@ export default function AdminPage() {
       { data: resultsData },
       { data: announceData },
       { data: updatesData },
-      { data: pwData },
     ] = await Promise.all([
       supabase.from('users').select('*').order('created_at', { ascending: false }),
       supabase.from('cases').select('*').order('created_at', { ascending: false }),
       supabase.from('results').select('*').order('created_at', { ascending: false }),
       supabase.from('announcements').select('*').eq('app_name', 'er_training').order('created_at', { ascending: false }),
       supabase.from('app_updates').select('*').order('created_at', { ascending: false }),
-      supabase.from('app_settings').select('value').eq('key', 'trial_password').single(),
     ]);
     setUsers(usersData || []);
     setCases(casesData || []);
     setResults(resultsData || []);
     setAnnouncements(announceData || []);
     setAppUpdates(updatesData || []);
-    if (pwData) setCurrentTrialPw(pwData.value || '');
     computeStats(usersData || [], casesData || [], resultsData || []);
     setLoadingData(false);
   };
@@ -354,18 +346,6 @@ export default function AdminPage() {
     await supabase.from('results').delete().eq('case_id', id);
     await supabase.from('cases').delete().eq('id', id);
     fetchAll();
-  };
-
-  // ===== パスワード更新 =====
-  const updateTrialPassword = async () => {
-    if (!newTrialPw.trim()) { alert('新しいパスワードを入力してください'); return; }
-    setPwLoading(true); setPwMessage('');
-    const { error } = await supabase.from('app_settings')
-      .update({ value: newTrialPw.trim(), updated_at: new Date().toISOString() })
-      .eq('key', 'trial_password');
-    if (error) { setPwMessage('❌ 更新に失敗しました'); }
-    else { setCurrentTrialPw(newTrialPw.trim()); setNewTrialPw(''); setPwMessage('✅ パスワードを更新しました'); }
-    setPwLoading(false);
   };
 
   const getDiffColor = (d) => DIFFICULTY_OPTIONS.find(o => o.value === d)?.color || 'bg-gray-100 text-gray-600';
@@ -968,27 +948,7 @@ export default function AdminPage() {
         {activeTab === 'settings' && (
           <div className="space-y-4 max-w-lg">
             <h2 className="font-bold text-gray-700">アプリ設定</h2>
-            <div className="bg-white rounded-xl shadow-sm p-5 space-y-4">
-              <h3 className="font-bold text-gray-700">🔑 お試しモードのパスワード</h3>
-              <div className="bg-gray-50 rounded-lg p-3">
-                <p className="text-xs text-gray-500 mb-1">現在のパスワード</p>
-                <p className="text-lg font-bold font-mono text-gray-800 tracking-widest">{currentTrialPw || '（未設定）'}</p>
-              </div>
-              <div>
-                <label className="text-xs font-bold text-gray-600 mb-1 block">新しいパスワードに変更</label>
-                <div className="flex gap-2">
-                  <input type="text" value={newTrialPw} onChange={e => { setNewTrialPw(e.target.value); setPwMessage(''); }}
-                    placeholder="新しいパスワードを入力"
-                    className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 font-mono"
-                    maxLength={20} />
-                  <button onClick={updateTrialPassword} disabled={pwLoading || !newTrialPw.trim()}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 disabled:opacity-50 flex-shrink-0">
-                    {pwLoading ? '更新中...' : '更新'}
-                  </button>
-                </div>
-                {pwMessage && <p className={`text-xs mt-2 ${pwMessage.startsWith('✅') ? 'text-green-600' : 'text-red-500'}`}>{pwMessage}</p>}
-              </div>
-            </div>
+            <p className="text-sm text-gray-400">現在、設定項目はありません。</p>
           </div>
         )}
 
