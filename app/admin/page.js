@@ -69,13 +69,109 @@ export default function AdminPage() {
   const [pwLoading, setPwLoading] = useState(false);
   const [pwMessage, setPwMessage] = useState('');
 
+  // ===== 2段階認証（管理者画面のみ） =====
+  const [mfaStatus, setMfaStatus] = useState('checking'); // checking | need_enroll | need_challenge | verified
+  const [mfaFactorId, setMfaFactorId] = useState(null);
+  const [mfaQrCode, setMfaQrCode] = useState('');
+  const [mfaSecret, setMfaSecret] = useState('');
+  const [mfaCode, setMfaCode] = useState('');
+  const [mfaLoading, setMfaLoading] = useState(false);
+  const [mfaError, setMfaError] = useState('');
+
   useEffect(() => {
     if (!loading) {
       if (!user) { router.push('/'); return; }
       if (user.email !== ADMIN_EMAIL) { router.push('/'); return; }
-      fetchAll();
+      checkMfaStatus();
     }
   }, [user, userProfile, loading]);
+
+  const checkMfaStatus = async () => {
+    const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (aalData?.currentLevel === 'aal2') {
+      setMfaStatus('verified');
+      fetchAll();
+      return;
+    }
+
+    const { data: factorsData } = await supabase.auth.mfa.listFactors();
+    const verifiedFactor = factorsData?.totp?.find(f => f.status === 'verified');
+    if (verifiedFactor) {
+      setMfaFactorId(verifiedFactor.id);
+      setMfaStatus('need_challenge');
+      return;
+    }
+
+    // 未完了の登録が残っていれば片付けてから、新しくQRコードを発行する
+    const unverifiedFactor = factorsData?.totp?.find(f => f.status === 'unverified');
+    if (unverifiedFactor) {
+      await supabase.auth.mfa.unenroll({ factorId: unverifiedFactor.id });
+    }
+    await startMfaEnroll();
+  };
+
+  const startMfaEnroll = async () => {
+    setMfaError('');
+    const { data, error } = await supabase.auth.mfa.enroll({ factorType: 'totp' });
+    if (error) {
+      setMfaError('2段階認証の準備に失敗しました: ' + error.message);
+      return;
+    }
+    setMfaFactorId(data.id);
+    setMfaQrCode(data.totp.qr_code);
+    setMfaSecret(data.totp.secret);
+    setMfaStatus('need_enroll');
+  };
+
+  const handleMfaEnrollVerify = async () => {
+    if (!mfaCode.trim()) return;
+    setMfaLoading(true);
+    setMfaError('');
+    const { data: challengeData, error: challengeError } = await supabase.auth.mfa.challenge({ factorId: mfaFactorId });
+    if (challengeError) {
+      setMfaError('認証コードの確認に失敗しました: ' + challengeError.message);
+      setMfaLoading(false);
+      return;
+    }
+    const { error: verifyError } = await supabase.auth.mfa.verify({
+      factorId: mfaFactorId,
+      challengeId: challengeData.id,
+      code: mfaCode.trim(),
+    });
+    if (verifyError) {
+      setMfaError('認証コードが正しくありません');
+      setMfaLoading(false);
+      return;
+    }
+    setMfaStatus('verified');
+    setMfaLoading(false);
+    fetchAll();
+  };
+
+  const handleMfaChallengeVerify = async () => {
+    if (!mfaCode.trim()) return;
+    setMfaLoading(true);
+    setMfaError('');
+    const { data: challengeData, error: challengeError } = await supabase.auth.mfa.challenge({ factorId: mfaFactorId });
+    if (challengeError) {
+      setMfaError('認証コードの確認に失敗しました: ' + challengeError.message);
+      setMfaLoading(false);
+      return;
+    }
+    const { error: verifyError } = await supabase.auth.mfa.verify({
+      factorId: mfaFactorId,
+      challengeId: challengeData.id,
+      code: mfaCode.trim(),
+    });
+    if (verifyError) {
+      setMfaError('認証コードが正しくありません');
+      setMfaLoading(false);
+      return;
+    }
+    setMfaStatus('verified');
+    setMfaLoading(false);
+    fetchAll();
+  };
 
   const fetchAll = async () => {
     setLoadingData(true);
@@ -283,7 +379,7 @@ export default function AdminPage() {
     c.category?.includes(caseSearchText)
   );
 
-  if (loading || loadingData) {
+  if (loading || mfaStatus === 'checking') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
@@ -293,6 +389,61 @@ export default function AdminPage() {
 
   if (user && user.email !== ADMIN_EMAIL) {
     return <div className="min-h-screen flex items-center justify-center"><p className="text-gray-500">管理者権限が必要です</p></div>;
+  }
+
+  if (mfaStatus === 'need_enroll' || mfaStatus === 'need_challenge') {
+    const isEnroll = mfaStatus === 'need_enroll';
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+        <div className="bg-white rounded-2xl shadow-sm p-6 max-w-sm w-full space-y-4">
+          <h1 className="font-bold text-gray-700 text-center">🔒 2段階認証</h1>
+          {isEnroll ? (
+            <>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                初回設定です。Google Authenticator等の認証アプリでQRコードを読み取り、表示された6桁のコードを入力してください。
+              </p>
+              {mfaQrCode && (
+                <div className="flex justify-center" dangerouslySetInnerHTML={{ __html: mfaQrCode }} />
+              )}
+              {mfaSecret && (
+                <p className="text-[10px] text-gray-400 text-center break-all">
+                  QRが読み取れない場合は手動でキーを入力: {mfaSecret}
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="text-xs text-gray-500 leading-relaxed">
+              認証アプリに表示されている6桁のコードを入力してください。
+            </p>
+          )}
+          <input
+            type="text"
+            inputMode="numeric"
+            maxLength={6}
+            value={mfaCode}
+            onChange={(e) => setMfaCode(e.target.value.replace(/[^0-9]/g, ''))}
+            placeholder="123456"
+            className="w-full border rounded-xl px-4 py-3 text-center text-lg tracking-widest"
+          />
+          {mfaError && <p className="text-xs text-red-600">{mfaError}</p>}
+          <button
+            onClick={isEnroll ? handleMfaEnrollVerify : handleMfaChallengeVerify}
+            disabled={mfaLoading || mfaCode.length !== 6}
+            className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold text-sm hover:bg-blue-700 transition disabled:opacity-50"
+          >
+            {mfaLoading ? '確認中…' : '確認する'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (loadingData) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+      </div>
+    );
   }
 
   return (
